@@ -227,7 +227,7 @@
       el.innerHTML = `<div class="filters"><div class="f"><label>Produto</label><select id="mv-prod"><option value="">Todos</option>${D.produtos().map((p) => `<option value="${p.id}" ${p.id === filtro ? 'selected' : ''}>${U.esc(p.nome)}</option>`).join('')}</select></div></div>
         <div class="table-wrap" style="max-height:60vh"><table class="t cards"><thead><tr><th>Data</th><th>Movimento</th><th>Produto</th><th class="num">Caixas</th><th>Referência</th></tr></thead><tbody>
         ${rows.slice(0, mvLimit).map((m) => `<tr><td data-l="Data">${U.date(m.data)}</td><td data-l="Tipo"><span class="badge ${m.qtd > 0 ? 'b-ok' : m.qtd < 0 ? 'b-mute' : 'b-danger'}">${m.tipo}</span></td><td data-l="Produto">${nome(m.produto_id)}</td>
-          <td data-l="Caixas" class="num ${m.qtd > 0 ? 'pos' : m.qtd < 0 ? '' : 'negv'}">${m.tipo === 'Perda' ? `(${U.num(m.info)})` : (m.qtd > 0 ? '+' : '') + U.num(m.qtd)}</td><td data-l="Ref.">${U.esc(m.ref || '')}</td></tr>`).join('') ||
+          <td data-l="Caixas" class="num ${m.info != null ? 'negv' : m.qtd > 0 ? 'pos' : ''}">${m.info != null ? `(${U.num(m.info)})` : (m.qtd > 0 ? '+' : '') + U.num(m.qtd)}</td><td data-l="Ref.">${U.esc(m.ref || '')}</td></tr>`).join('') ||
           '<tr><td colspan="5" class="empty">Sem movimentações.</td></tr>'}</tbody></table></div>
         ${rows.length > mvLimit ? `<div class="list-foot"><span>Mostrando ${mvLimit} de ${rows.length}</span><button class="btn btn-sm" data-act="mv-mais">Mostrar mais</button></div>` : ''}`;
       U.$('#mv-prod', el).onchange = (e) => { el.dataset.prod = e.target.value; renderTab(); };
@@ -275,7 +275,7 @@
     Excel.generico('estoque', {
       Saldos: Object.values(est).map((e) => ({ Produto: e.produto.nome, Inicial: e.inicial, Entradas: e.entradas, 'Saídas NF': e.saidas, Retornos: e.retornos,
         Reposições: e.reposicoes, Acertos: e.acertos, 'Saldo (cx)': e.saldo, 'Saldo (un)': e.saldo * e.produto.unidades_caixa, 'Perdas registradas': e.perdas })),
-      Extrato: D.movimentos().map((m) => ({ Data: U.date(m.data), Movimento: m.tipo, Produto: nome(m.produto_id), Caixas: m.tipo === 'Perda' ? -m.info : m.qtd, Referência: m.ref })),
+      Extrato: D.movimentos().map((m) => ({ Data: U.date(m.data), Movimento: m.tipo, Produto: nome(m.produto_id), Caixas: m.info != null ? 0 : m.qtd, 'Perda (informativo)': m.info || '', Referência: m.ref })),
       Entradas: Store.list('entradas').filter((e) => e.empresa_id === D.empresaId()).map((e) => ({ Data: U.date(e.data), Produto: nome(e.produto_id), Caixas: e.caixas,
         'Nota fornecedor': e.nota_fornecedor || '', Fornecedor: e.fornecedor || '', Lote: e.lote || '', Validade: U.date(e.validade), 'Custo unitário': e.custo_unitario, Observação: e.observacao || '' })),
     });

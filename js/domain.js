@@ -89,35 +89,28 @@
   /**
    * Saldo por produto em caixas.
    * saldo = inicial + entradas − saídas por NF + retornos − reposições de troca ± acertos
-   * Saídas: pedidos com número de nota (inclusive cancelados depois de faturados;
-   * nesse caso a volta da mercadoria é lançada como retorno pela ocorrência).
-   * Perdas: itens de ocorrências que não voltam ao estoque (apenas informativo).
+   * Saídas: pedidos com número de nota que não estão cancelados (inclui devolvidos).
+   * Cancelamento de pedido faturado: a saída deixa de contar; itens marcados como
+   * "não volta ao estoque" entram como saída de perda.
+   * Devolução/troca: itens que voltam entram como retorno; os que não voltam são
+   * só registrados como perda (a mercadoria já tinha saído na nota).
    */
   D.estoque = (empresaId = D.empresaId()) => {
-    const cfg = D.estoqueConfig(empresaId);
-    const base = cfg.data_base || '0000-00-00';
     const res = {};
     for (const p of D.produtos(empresaId, true)) {
-      res[p.id] = { produto: p, inicial: Number((cfg.inicial || {})[p.id]) || 0, entradas: 0, saidas: 0,
-        retornos: 0, reposicoes: 0, acertos: 0, perdas: 0, saldo: 0 };
+      res[p.id] = { produto: p, inicial: 0, entradas: 0, saidas: 0, retornos: 0, reposicoes: 0, acertos: 0, perdas: 0, saldo: 0 };
     }
-    const add = (pid, k, v) => { if (res[pid]) res[pid][k] += Number(v) || 0; };
-
-    for (const e of Store.list('entradas')) if (e.empresa_id === empresaId && e.data >= base) add(e.produto_id, 'entradas', e.caixas);
-    for (const p of D.pedidos(empresaId)) {
-      if (!p.nota) continue;
-      const dt = p.data_faturamento || p.data_pedido || '';
-      if (dt < base) continue;
-      for (const it of p.itens || []) add(it.produto_id, 'saidas', it.caixas);
+    const cfg = D.estoqueConfig(empresaId);
+    for (const [pid, v] of Object.entries(cfg.inicial || {})) if (res[pid]) res[pid].inicial = Number(v) || 0;
+    for (const m of D.movimentos(empresaId)) {
+      const r = res[m.produto_id];
+      if (!r) continue;
+      if (m.campo) r[m.campo] += Math.abs(m.qtd);
+      if (m.perda) r.perdas += m.perda;
+      if (m.acerto != null) r.acertos += m.acerto;
     }
-    for (const o of Store.list('ocorrencias')) {
-      if (o.empresa_id !== empresaId || o.data < base) continue;
-      for (const it of o.itens || []) add(it.produto_id, it.volta_estoque ? 'retornos' : 'perdas', it.caixas);
-      for (const it of o.reposicao || []) add(it.produto_id, 'reposicoes', it.caixas);
-    }
-    for (const a of Store.list('acertos')) if (a.empresa_id === empresaId && a.data >= base) add(a.produto_id, 'acertos', a.diferenca);
-
     for (const r of Object.values(res)) {
+      for (const k of ['entradas', 'saidas', 'retornos', 'reposicoes', 'acertos', 'perdas']) r[k] = U.round2(r[k]);
       r.saldo = U.round2(r.inicial + r.entradas - r.saidas + r.retornos - r.reposicoes + r.acertos);
     }
     return res;
@@ -130,33 +123,61 @@
     const mv = [];
     for (const e of Store.list('entradas')) {
       if (e.empresa_id === empresaId && e.data >= base)
-        mv.push({ data: e.data, tipo: 'Entrada', produto_id: e.produto_id, qtd: +e.caixas, ref: [e.nota_fornecedor && 'NF ' + e.nota_fornecedor, e.fornecedor].filter(Boolean).join(' · ') });
+        mv.push({ data: e.data, tipo: 'Entrada', campo: 'entradas', produto_id: e.produto_id, qtd: +e.caixas, ref: [e.nota_fornecedor && 'NF ' + e.nota_fornecedor, e.fornecedor].filter(Boolean).join(' · ') });
     }
     for (const p of D.pedidos(empresaId)) {
-      if (!p.nota) continue;
+      if (!p.nota || p.status === 'cancelado') continue;
       const dt = p.data_faturamento || p.data_pedido || '';
       if (dt < base) continue;
       for (const it of p.itens || []) {
-        if (+it.caixas) mv.push({ data: dt, tipo: 'Saída NF', produto_id: it.produto_id, qtd: -it.caixas, ref: `NF ${p.nota} · ${p.cliente_nome || ''}` });
+        if (+it.caixas) mv.push({ data: dt, tipo: 'Saída NF', campo: 'saidas', produto_id: it.produto_id, qtd: -it.caixas, ref: `NF ${p.nota} · ${p.cliente_nome || ''}` });
       }
     }
     for (const o of Store.list('ocorrencias')) {
       if (o.empresa_id !== empresaId || o.data < base) continue;
       const nome = U.TIPOS_OCORRENCIA[o.tipo] || o.tipo;
+      const ref = `${nome} · ${o.cliente_nome || ''}${o.nota ? ' · NF ' + o.nota : ''}`;
       for (const it of o.itens || []) {
-        if (!+it.caixas) continue;
-        if (it.volta_estoque) mv.push({ data: o.data, tipo: 'Retorno', produto_id: it.produto_id, qtd: +it.caixas, ref: `${nome} · ${o.cliente_nome || ''}` });
-        else mv.push({ data: o.data, tipo: 'Perda', produto_id: it.produto_id, qtd: 0, info: +it.caixas, ref: `${nome} · ${o.cliente_nome || ''} (não volta ao estoque)` });
+        const q = +it.caixas;
+        if (!q) continue;
+        if (o.tipo === 'cancelamento') {
+          if (!it.volta_estoque) mv.push({ data: o.data, tipo: 'Perda', campo: 'saidas', perda: q, produto_id: it.produto_id, qtd: -q, ref: ref + ' (cancelado, não voltou)' });
+        } else if (it.volta_estoque) mv.push({ data: o.data, tipo: 'Retorno', campo: 'retornos', produto_id: it.produto_id, qtd: q, ref });
+        else mv.push({ data: o.data, tipo: 'Perda', campo: null, perda: q, produto_id: it.produto_id, qtd: 0, info: q, ref: ref + ' (não voltou ao estoque)' });
       }
       for (const it of o.reposicao || []) {
-        if (+it.caixas) mv.push({ data: o.data, tipo: 'Reposição', produto_id: it.produto_id, qtd: -it.caixas, ref: `Troca · ${o.cliente_nome || ''}` });
+        if (+it.caixas) mv.push({ data: o.data, tipo: 'Reposição', campo: 'reposicoes', produto_id: it.produto_id, qtd: -it.caixas, ref: `Troca · ${o.cliente_nome || ''}` });
       }
     }
     for (const a of Store.list('acertos')) {
       if (a.empresa_id === empresaId && a.data >= base)
-        mv.push({ data: a.data, tipo: 'Acerto', produto_id: a.produto_id, qtd: +a.diferenca, ref: a.motivo || 'Inventário' });
+        mv.push({ data: a.data, tipo: 'Acerto', campo: null, acerto: +a.diferenca, produto_id: a.produto_id, qtd: +a.diferenca, ref: a.motivo || 'Inventário' });
     }
     return mv.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  };
+
+  /** Quantidade legível: "3 un" quando não fecha caixa, senão "2 cx". */
+  D.qtd = (caixas, produtoId) => {
+    const p = D.produto(produtoId);
+    const upc = (p && +p.unidades_caixa) || 1;
+    let un = (+caixas || 0) * upc;
+    if (Math.abs(un - Math.round(un)) < 0.05) un = Math.round(un);
+    if (Math.abs(un % upc) > 0.001 && upc > 1) return `${U.num(un)} un (${U.num(caixas)} cx)`;
+    return `${U.num(caixas)} cx`;
+  };
+
+  /**
+   * Separa o texto de observação no padrão usado até hoje:
+   * "OUROSAF | N° DO PEDIDO : 9944732" → vendedor "OUROSAF", pedido "9944732".
+   */
+  D.separarObs = (obs) => {
+    const txt = String(obs || '').replace(/\s+/g, ' ').trim();
+    const m = txt.match(/\b(?:N\s*[°ºo]?\s*(?:DO\s+)?PEDIDO|PEDIDO(?:\s*N\s*[°º])?)\s*[:.]?\s*([\d][\d\s.-]*\d|\d)/i);
+    if (!m) return { vendedor: txt.replace(/[\s|\-–]*N?\s*[°º]?\s*(?:DO\s+)?PEDIDO\s*:?\s*$/i, '').trim(), pedido_cliente: '', resto: '' };
+    const pedido = m[1].replace(/\s+/g, ' ').trim();
+    const antes = txt.slice(0, m.index).replace(/[\s|\-–:]+$/, '').trim();
+    const depois = txt.slice(m.index + m[0].length).replace(/^[\s|\-–:]+/, '').trim();
+    return { vendedor: antes || depois, pedido_cliente: pedido, resto: antes && depois ? depois : '' };
   };
 
   window.D = D;

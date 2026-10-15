@@ -211,6 +211,7 @@
   U.DESTAQUES = [
     { v: '', label: 'Sem cor' },
     { v: 'amarelo', label: 'Amarelo' },
+    { v: 'laranja', label: 'Laranja' },
     { v: 'verde', label: 'Verde' },
     { v: 'azul', label: 'Azul' },
     { v: 'vermelho', label: 'Vermelho' },

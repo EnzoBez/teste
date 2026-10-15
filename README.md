@@ -11,17 +11,24 @@ Sistema de representação comercial da Ourosaf, usado hoje na representação d
 
 ## Como o estoque é calculado
 
+É a mesma regra do sistema anterior. Depois de importar o backup, os saldos batem: Pudim 85,46 cx e Brigadeirão −6 cx.
+
 ```
 saldo = estoque inicial (na data-base)
       + entradas de carga
-      − saídas por nota fiscal (o pedido baixa quando recebe o número da nota)
-      + retornos (ocorrências com "volta ao estoque = sim")
+      − saídas por nota fiscal (pedidos com número de nota que não estão cancelados)
+      + retornos (devoluções/trocas com "volta ao estoque = sim")
       − reposições enviadas em trocas
       ± acertos de inventário
 ```
 
-Quando um produto não volta ao estoque (avariado, vencido), ele fica registrado como **perda** e não muda o saldo, porque a mercadoria já tinha saído na nota.
-Quando se cancela um pedido que ainda não tinha nota, nada muda no estoque, porque a mercadoria nunca saiu.
+- **Cancelamento de pedido já faturado:** a saída da nota deixa de contar. Se a mercadoria não voltar (estragou), marque "não volta" e ela sai do estoque como perda.
+- **Devolução que não volta ao estoque** (vencido, impróprio): fica registrada como perda e não muda o saldo, porque a mercadoria já tinha saído na nota.
+- Devoluções podem ser lançadas **em unidades** (ex.: 3 pudins). O sistema converte para frações de caixa.
+
+## Importar do sistema anterior
+
+Em **Ajustes e backup → Importar do sistema antigo**, escolha o arquivo `ourosaf_backup_*.json`. Entram clientes, pedidos, estoque e ocorrências. A observação é separada em **vendedor** e **nº do pedido do cliente** (ex.: `OUROSAF | N° DO PEDIDO : 9944732`). Linhas vazias "#N/A" da planilha antiga são ignoradas. Importar o mesmo arquivo de novo não duplica nada.
 
 ## Como funciona a vinculação das notas (.zip)
 
@@ -31,7 +38,7 @@ O sistema lê cada DANFE em PDF (número, emissão, CNPJ do destinatário, itens
 - Também são comparados: quantidade de caixas, preço da caixa, valor total, prazo (ex.: "28 DDL" × "28 dias") e o nº do pedido do cliente, quando ele existe.
 - Antes de gravar, aparece uma tela de conferência. Você pode trocar qualquer vínculo ou criar um pedido a partir de uma nota que não tem par.
 
-Testado com o arquivo `notas_13.10.2026.zip`: as 23 notas foram lidas corretamente.
+Testado com o arquivo `notas_13.10.2026.zip`. Para isso, os números de nota foram apagados dos pedidos importados e o sistema vinculou tudo sozinho: acertou os 23 pedidos que tinham sido vinculados à mão.
 
 ---
 

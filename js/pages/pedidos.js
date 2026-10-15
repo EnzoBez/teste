@@ -51,10 +51,10 @@
               <div class="client-pill" id="ped-cli-pill" hidden></div>
             </div>
 
+            <div class="f s4"><label>Vendedor</label><input type="text" name="vendedor" list="dl-vend-ped" placeholder="Ex.: OUROSAF - ELI"></div>
             <div class="f s4"><label>E-mail do cliente</label><input type="email" name="cliente_email"></div>
-            <div class="f s4"><label>Cidade</label><input type="text" name="cidade"></div>
-            <div class="f s4"><label>Bairro</label><input type="text" name="bairro"></div>
-            <div class="f s4"><label>Vendedor</label><input type="text" name="vendedor" list="dl-vendedores"></div>
+            <div class="f s2"><label>Cidade</label><input type="text" name="cidade"></div>
+            <div class="f s2"><label>Bairro</label><input type="text" name="bairro"></div>
             <div class="f s4"><label>Transporte</label><input type="text" name="transporte" list="dl-transportes"></div>
             <div class="f s4"><label>Anotação do canhoto</label><input type="text" name="anotacao_canhoto"></div>
           </div>
@@ -76,7 +76,7 @@
           <div class="order-foot">
             <div class="total-box"><small>Valor total do pedido</small><div id="ped-total">R$ 0,00</div></div>
             <div class="fields">
-              <div class="f s12"><label>Observação</label><input type="text" name="observacao" list="dl-obs" placeholder="Ex.: OUROSAF - ELI"></div>
+              <div class="f s12"><label>Observação</label><input type="text" name="observacao" list="dl-obs" placeholder="Ex.: entregar pela manhã"></div>
               <div class="f s3"><label>Nota fiscal</label><input type="text" name="nota" inputmode="numeric" placeholder="Depois do faturamento"></div>
               <div class="f s3"><label>Data do faturamento</label><input type="date" name="data_faturamento"></div>
               <div class="f s3"><label>Destaque da linha</label><select name="destaque">${U.DESTAQUES.map((d) => `<option value="${d.v}">${d.label}</option>`).join('')}</select></div>
@@ -102,12 +102,12 @@
         </div>
         <div class="filters" id="ped-filters">
           <div class="f wide"><label>Busca geral</label><input type="search" data-f="q" placeholder="Cliente, CNPJ, cidade, bairro, nota, nº…"></div>
-          <div class="f"><label>Observação / vendedor</label><input type="search" data-f="obs" list="dl-obs"></div>
+          <div class="f"><label>Vendedor / observação</label><input type="search" data-f="obs" list="dl-vend-ped"></div>
           <div class="f"><label>Nota exata</label><input type="search" data-f="nota" inputmode="numeric"></div>
           <div class="f"><label>Período por</label><select data-f="campoData"><option value="data_pedido">Data do pedido</option><option value="data_faturamento">Data do faturamento</option></select></div>
           <div class="f"><label>De</label><input type="date" data-f="de"></div>
           <div class="f"><label>Até</label><input type="date" data-f="ate"></div>
-          <div class="f"><label>Status</label><select data-f="status"><option value="ativo">Ativos</option><option value="cancelado">Cancelados</option><option value="">Todos</option></select></div>
+          <div class="f"><label>Status</label><select data-f="status"><option value="ativo">Ativos</option><option value="cancelado">Cancelados</option><option value="devolvido">Devolvidos</option><option value="">Todos</option></select></div>
           <div class="f"><label>Faturamento</label><select data-f="fat"><option value="">Todos</option><option value="sem">Sem nota</option><option value="com">Com nota</option></select></div>
           <div class="f"><label>Canhoto</label><select data-f="canhoto"><option value="">Todos</option><option value="ok">Assinado</option><option value="pend">Pendente</option></select></div>
           <div class="f"><label>Tipo</label><select data-f="tipo"><option value="">Todos</option>${Object.entries(U.TIPOS_PEDIDO).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
@@ -141,6 +141,7 @@
     };
     const prazos = Array.from(new Set(['7 dias', '14 dias', '21 dias', '28 dias', '35 dias', '28/35 dias', 'À vista', ...freq('prazo')]));
     U.$('#ped-dls', root).innerHTML = `
+      <datalist id="dl-vend-ped">${freq('vendedor').map((v) => `<option value="${U.esc(v)}">`).join('')}</datalist>
       <datalist id="dl-obs">${freq('observacao').map((v) => `<option value="${U.esc(v)}">`).join('')}</datalist>
       <datalist id="dl-transportes">${freq('transporte').map((v) => `<option value="${U.esc(v)}">`).join('')}</datalist>
       <datalist id="dl-prazos">${prazos.map((v) => `<option value="${U.esc(v)}">`).join('')}</datalist>`;
@@ -292,7 +293,11 @@
       set('cliente_email', c.email);
       set('cidade', c.cidade);
       set('bairro', c.bairro);
-      set('vendedor', c.vendedor);
+      // Vendedor: o do último pedido deste cliente; se não houver, o do cadastro
+      const d = U.digits(c.cnpj);
+      let ult = null;
+      for (const p of Store.list('pedidos')) if (U.digits(p.cnpj) === d && p.vendedor && (!ult || (p.data_pedido || '') > (ult.data_pedido || ''))) ult = p;
+      set('vendedor', ult ? ult.vendedor : c.vendedor);
     }
     // Último preço praticado
     U.$$('.prod', root).forEach((card) => {
@@ -548,7 +553,7 @@
       if (f.de && dt < f.de) return false;
       if (f.ate && (!dt || dt > f.ate)) return false;
       if (notaD && U.digits(p.nota) !== notaD) return false;
-      if (obs && !U.norm((p.observacao || '') + ' ' + (p.vendedor || '')).includes(obs)) return false;
+      if (obs && !U.norm([p.observacao, p.vendedor, p.pedido_cliente].join(' ')).includes(obs)) return false;
       if (q) {
         if (qd.length >= 3 && (U.digits(p.cnpj).includes(qd) || U.digits(p.nota) === qd || String(p.numero) === qd || U.digits(p.pedido_cliente) === qd)) return true;
         if (!U.norm([p.cliente_nome, p.cidade, p.bairro, p.observacao, p.vendedor, p.nota, p.transporte].join(' ')).includes(q)) return false;
@@ -586,7 +591,7 @@
     summary(rows);
     const arrow = (k) => (sort.k === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : '');
     const head = `<thead><tr><th></th><th class="sortable" data-k="nota">Nota${arrow('nota')}</th><th class="sortable" data-k="data">Data${arrow('data')}</th>
-      <th class="sortable" data-k="cliente">Cliente${arrow('cliente')}</th><th class="sortable" data-k="cidade">Cidade${arrow('cidade')}</th><th>Obs. / vendedor</th>
+      <th class="sortable" data-k="cliente">Cliente${arrow('cliente')}</th><th class="sortable" data-k="cidade">Cidade${arrow('cidade')}</th><th>Vendedor / obs.</th>
       ${prods.map((p) => `<th class="sortable num" data-k="p:${p.id}">${U.esc(p.nome)}${arrow('p:' + p.id)}</th>`).join('')}
       <th class="sortable num" data-k="total">Total${arrow('total')}</th><th></th></tr></thead>`;
     const body = rows.slice(0, limit).map((p) => {
@@ -594,11 +599,11 @@
       const tipo = p.tipo && p.tipo !== 'venda' ? `<span class="badge ${p.tipo === 'bonificacao' ? 'b-warn' : 'b-info'}">${U.TIPOS_PEDIDO[p.tipo]}</span> ` : '';
       return `<tr data-id="${p.id}" class="${cls}">
         <td><input type="checkbox" data-sel ${selected.has(p.id) ? 'checked' : ''} aria-label="Selecionar"></td>
-        <td data-l="Nota"><button class="nota-btn ${p.nota ? 'has' : ''}" data-act="nota">${p.nota ? U.esc(p.nota) : 'SEM NOTA'}</button><span class="sub">nº ${p.numero || '—'} ${p.status === 'cancelado' ? '<span class="badge b-danger">Cancelado</span>' : ''}</span></td>
+        <td data-l="Nota"><button class="nota-btn ${p.nota ? 'has' : ''}" data-act="nota">${p.nota ? U.esc(p.nota) : 'SEM NOTA'}</button><span class="sub">nº ${p.numero || '—'} ${p.status === 'cancelado' ? '<span class="badge b-danger">Cancelado</span>' : p.status === 'devolvido' ? '<span class="badge b-warn">Devolvido</span>' : ''}</span></td>
         <td data-l="Data">${U.date(p.data_pedido)}${p.data_faturamento ? `<span class="sub">Fat.: ${U.date(p.data_faturamento)}</span>` : ''}</td>
         <td data-l="Cliente" class="nm">${tipo}<b>${U.esc(p.cliente_nome || '')}</b><span class="sub">${U.esc(U.fmtDoc(p.cnpj))}${p.prazo ? ' · ' + U.esc(p.prazo) : ''}</span></td>
         <td data-l="Cidade">${U.esc(p.cidade || '')}<span class="sub">${U.esc(p.bairro || '')}</span></td>
-        <td data-l="Obs.">${U.esc(p.observacao || '')}${p.vendedor && p.vendedor !== p.observacao ? `<span class="sub">${U.esc(p.vendedor)}</span>` : ''}</td>
+        <td data-l="Vendedor">${U.esc(p.vendedor || '')}${p.pedido_cliente ? `<span class="sub">Ped. ${U.esc(p.pedido_cliente)}</span>` : ''}${p.observacao ? `<span class="sub">${U.esc(p.observacao)}</span>` : ''}</td>
         ${prods.map((pr) => {
           const it = (p.itens || []).find((i) => i.produto_id === pr.id);
           const cx = it ? +it.caixas : 0;

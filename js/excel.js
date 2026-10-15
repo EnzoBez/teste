@@ -52,7 +52,7 @@
       r.Observação = p.observacao || '';
       r['Anotação do canhoto'] = p.anotacao_canhoto || '';
       r.Canhoto = p.canhoto ? 'Assinado' : 'Pendente';
-      r.Status = p.status === 'cancelado' ? 'Cancelado' : p.nota ? 'Faturado' : 'Aguardando faturamento';
+      r.Status = p.status === 'cancelado' ? 'Cancelado' : p.status === 'devolvido' ? 'Devolvido' : p.nota ? 'Faturado' : 'Aguardando faturamento';
       return r;
     });
     const wb = XLSX.utils.book_new();

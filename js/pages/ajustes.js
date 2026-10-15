@@ -14,6 +14,11 @@
           <button class="btn btn-soft" id="aj-nova-emp">+ Nova empresa</button></div>
         <div id="aj-emps"></div>
       </div>
+      <div class="card" id="aj-mig-card">
+        <div class="card-head"><div><h2>Importar do sistema antigo</h2><div class="sub">Arquivo de backup (.json) gerado pelo botão "Baixar backup em JSON" do sistema anterior</div></div>
+          <button class="btn btn-primary" id="aj-mig">Escolher arquivo…</button></div>
+        <p class="muted small mb0">Traz clientes, pedidos, estoque (data-base, entradas e acertos) e ocorrências. A observação é separada em vendedor e nº do pedido do cliente. Pode importar de novo sem duplicar: os registros são atualizados.</p>
+      </div>
       <div class="grid-2">
         <div class="card">
           <div class="card-head"><div><h2>Backup</h2><div class="sub">Cópia completa de todos os dados em um arquivo</div></div></div>
@@ -37,6 +42,7 @@
     };
     U.$('#aj-restore', root).onclick = restaurar;
     U.$('#aj-imp-cli', root).onclick = importarClientes;
+    U.$('#aj-mig', root).onclick = importarAntigo;
     root.addEventListener('change', onProdChange);
     root.addEventListener('click', onClick);
     render();
@@ -214,6 +220,41 @@
     if (novos.length) Store.saveMany('clientes', novos);
     if (atualizados.length) Store.saveMany('clientes', atualizados);
     U.toast(`${novos.length} cliente(s) importado(s)`);
+  }
+
+  async function importarAntigo() {
+    const f = await escolherArquivo('.json,application/json');
+    if (!f) return;
+    let old;
+    try { old = JSON.parse(await f.text()); } catch (e) { U.toast('Arquivo inválido', 'error'); return; }
+    if (!Migracao.isOld(old)) { U.toast('Este arquivo não parece ser o backup do sistema antigo', 'error', 5000); return; }
+    const empresaId = D.empresaId();
+    const prods = D.produtos(empresaId, true);
+    const achar = (k) => (prods.find((p) => U.norm(p.palavra_chave + ' ' + p.nome).includes(k === 'brig' ? 'brig' : 'pudim')) || {}).id;
+    if (!achar('pudim') || !achar('brig')) { U.toast('A empresa atual precisa ter os produtos Pudim e Brigadeirão', 'error', 6000); return; }
+    const r = Migracao.converter(old, { empresaId, produtoId: achar });
+    const jaTem = D.pedidos(empresaId).length;
+    const ok = await U.confirm(`Encontrado no arquivo (${U.date((old.exported_at || '').slice(0, 10))}): ${r.clientes.length} clientes, ${r.pedidos.length} pedidos ` +
+      `(${r.ignorados} linhas vazias "#N/A" ignoradas), ${r.entradas.length} entradas de estoque, ${r.acertos.length} acertos, ${r.ocorrencias.length} ocorrências. ` +
+      `Data-base do estoque: ${U.date(r.config.data_base) || '—'}.` + (jaTem ? ` Já existem ${jaTem} pedidos aqui; os importados serão somados (reimportação não duplica).` : '') + ' Importar agora?',
+      { ok: 'Importar', title: 'Importar sistema antigo' });
+    if (!ok) return;
+    if (r.unidades.pudim) Store.save('produtos', { id: achar('pudim'), unidades_caixa: r.unidades.pudim });
+    if (r.unidades.brig) Store.save('produtos', { id: achar('brig'), unidades_caixa: r.unidades.brig });
+    Store.saveMany('clientes', r.clientes);
+    Store.saveMany('pedidos', r.pedidos);
+    if (r.entradas.length) Store.saveMany('entradas', r.entradas);
+    if (r.acertos.length) Store.saveMany('acertos', r.acertos);
+    if (r.ocorrencias.length) Store.saveMany('ocorrencias', r.ocorrencias);
+    if (r.config.data_base) Store.setConfig('estoque:' + empresaId, r.config);
+    const est = D.estoque(empresaId);
+    const resumo = Object.values(est).map((e) => `${e.produto.nome}: ${U.num(e.saldo)} cx`).join(' · ');
+    await U.modal({
+      title: 'Importação concluída',
+      body: `<p><b>${r.clientes.length}</b> clientes, <b>${r.pedidos.length}</b> pedidos, <b>${r.entradas.length}</b> entradas e <b>${r.ocorrencias.length}</b> ocorrências importados.</p>
+        <p>Estoque calculado: <b>${U.esc(resumo)}</b></p>${r.avisos.map((a) => `<p class="muted">${U.esc(a)}</p>`).join('')}
+        ${Store.mode === 'supabase' ? '<p class="muted">O envio para a nuvem continua em segundo plano — acompanhe no rodapé da barra lateral e não feche a página até aparecer "Salvo na nuvem".</p>' : ''}`,
+    });
   }
 
   Pages.ajustes = {

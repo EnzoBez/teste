@@ -187,6 +187,7 @@ table.t { border-collapse: collapse; width: 100%; font-size: 13px; }
 .t tr.cancelado td.nm { text-decoration: line-through; }
 .t tr.hl-amarelo td { background: #FDF8D6; }
 .t tr.hl-verde td { background: #E4F2E6; }
+.t tr.hl-laranja td { background: #FFEBD2; }
 .t tr.hl-azul td { background: #E3EEF8; }
 .t tr.hl-vermelho td { background: #FBE6E3; }
 .t tr.hl-roxo td { background: #EFE7F6; }

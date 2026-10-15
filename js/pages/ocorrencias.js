@@ -33,7 +33,8 @@
               <div class="prod-head"><h3>${U.esc(p.nome)}</h3><span class="badge b-info" data-pedido-qtd></span></div>
               <div class="fields">
                 <div class="f"><label data-lbl-cx>Caixas devolvidas</label><input type="number" step="any" min="0" data-k="caixas" inputmode="decimal" placeholder="0"></div>
-                <div class="f"><label>Volta ao estoque?</label><select data-k="volta"><option value="1">Sim — produto em bom estado</option><option value="0">Não — avariado, vencido ou descartado</option></select></div>
+                <div class="f"><label>ou em unidades</label><input type="number" step="1" min="0" data-k="unidades" inputmode="numeric" placeholder="0"></div>
+                <div class="f" style="grid-column:1/-1"><label>Volta ao estoque?</label><select data-k="volta"><option value="1">Sim — produto em bom estado</option><option value="0">Não — avariado, vencido ou descartado</option></select></div>
                 <div class="f" data-repo hidden style="grid-column:1/-1"><label>Caixas enviadas em reposição (troca)</label><input type="number" step="any" min="0" data-k="repo" inputmode="decimal" placeholder="0"></div>
               </div></div>`).join('')}
           </div>
@@ -67,8 +68,18 @@
       if (e.target.name === 'tipo') ajustaTipo(true);
       efeito();
     });
-    U.$$('[data-k=caixas]', root).forEach((i) => i.addEventListener('input', () => {
+    U.$$('#oc-itens [data-k=unidades]', root).forEach((i) => i.addEventListener('input', () => {
       const card = i.closest('.prod');
+      const upc = +(D.produto(card.dataset.pid) || {}).unidades_caixa || 1;
+      const cx = card.querySelector('[data-k=caixas]');
+      cx.value = i.value ? +(U.parseNum(i.value) / upc).toFixed(4) : '';
+      cx.dispatchEvent(new Event('input', { bubbles: true }));
+    }));
+    U.$$('[data-k=caixas]', root).forEach((i) => i.addEventListener('input', (ev) => {
+      const card = i.closest('.prod');
+      const upc = +(D.produto(card.dataset.pid) || {}).unidades_caixa || 1;
+      const un = card.querySelector('[data-k=unidades]');
+      if (ev.isTrusted) un.value = i.value ? U.round2(U.parseNum(i.value) * upc) : '';
       const repo = card.querySelector('[data-k=repo]');
       if (form.querySelector('[name=tipo]:checked').value === 'troca' && !repo.dataset.touched) repo.value = i.value;
     }));
@@ -160,6 +171,7 @@
     U.$$('#oc-itens .prod', root).forEach((card) => {
       const cx = D.caixasDe(pedido, card.dataset.pid);
       card.querySelector('[data-k=caixas]').value = cx || '';
+      card.querySelector('[data-k=unidades]').value = cx ? U.round2(cx * ((D.produto(card.dataset.pid) || {}).unidades_caixa || 1)) : '';
     });
   }
 
@@ -168,7 +180,7 @@
     U.$$('[data-repo]', root).forEach((el) => { el.hidden = tipo !== 'troca'; });
     U.$$('[data-lbl-cx]', root).forEach((el) => { el.textContent = tipo === 'cancelamento' ? 'Caixas canceladas' : tipo === 'troca' ? 'Caixas recolhidas' : 'Caixas devolvidas'; });
     if (fromUser && tipo === 'cancelamento') preencheCancelamento();
-    if (fromUser && tipo !== 'cancelamento') U.$$('#oc-itens [data-k=caixas]', root).forEach((i) => { i.value = ''; });
+    if (fromUser && tipo !== 'cancelamento') U.$$('#oc-itens [data-k=caixas], #oc-itens [data-k=unidades]', root).forEach((i) => { i.value = ''; });
   }
 
   function lerItens() {
@@ -199,11 +211,17 @@
       aviso.innerHTML += '<div class="alert alert-warn mt">Este pedido já está cancelado.</div>';
     }
     const parts = [];
-    if (!(tipo === 'cancelamento' && semNota)) {
-      for (const i of itens) parts.push(i.volta_estoque ? `<b>+${U.num(i.caixas)} cx ${U.esc(nome(i.produto_id))}</b> voltam ao estoque` : `${U.num(i.caixas)} cx ${U.esc(nome(i.produto_id))} registradas como <b>perda</b>`);
+    if (tipo === 'cancelamento') {
+      if (pedido) parts.push(`pedido nº ${pedido.numero} passa para <b>cancelado</b>`);
+      if (pedido && pedido.nota) {
+        parts.push('a saída da nota deixa de contar no estoque');
+        for (const i of itens) if (!i.volta_estoque) parts.push(`${D.qtd(i.caixas, i.produto_id)} de ${U.esc(nome(i.produto_id))} <b>não voltam</b> (perda, sai do estoque)`);
+      }
+    } else {
+      for (const i of itens) parts.push(i.volta_estoque ? `<b>+${D.qtd(i.caixas, i.produto_id)} ${U.esc(nome(i.produto_id))}</b> voltam ao estoque` : `${D.qtd(i.caixas, i.produto_id)} ${U.esc(nome(i.produto_id))} registradas como <b>perda</b> (já tinham saído na nota)`);
       if (tipo === 'troca') for (const r of repo) parts.push(`<b>−${U.num(r.caixas)} cx ${U.esc(nome(r.produto_id))}</b> saem em reposição`);
+      if (tipo === 'devolucao' && pedido && devolucaoTotal(pedido, itens)) parts.push('pedido marcado como <b>devolvido</b>');
     }
-    if (tipo === 'cancelamento' && pedido) parts.push(`pedido nº ${pedido.numero} passa para <b>cancelado</b>`);
     box.innerHTML = parts.length ? 'Ao registrar: ' + parts.join(' · ') : 'Selecione o pedido e informe as quantidades.';
   }
 
@@ -238,15 +256,25 @@
     Store.save('ocorrencias', o);
     // Cancelamento: marca o pedido. Se a ocorrência editada deixou de ser cancelamento, reativa.
     if (f.tipo === 'cancelamento' && pedido.status !== 'cancelado') Store.save('pedidos', { id: pedido.id, status: 'cancelado' });
-    if (old && old.tipo === 'cancelamento' && (f.tipo !== 'cancelamento' || old.pedido_id !== pedido.id)) reativarSeSemCancelamento(old.pedido_id, o.id);
+    if (f.tipo === 'devolucao' && pedido.status === 'ativo' && devolucaoTotal(pedido, itens)) Store.save('pedidos', { id: pedido.id, status: 'devolvido' });
+    if (old && old.tipo !== 'troca' && (f.tipo !== old.tipo || old.pedido_id !== pedido.id)) reativarSeSemCancelamento(old.pedido_id, o.id);
     U.toast(`${U.TIPOS_OCORRENCIA[f.tipo]} registrado(a)`);
     reset();
   }
 
+  /** Volta o pedido para "ativo" quando não resta ocorrência que justifique cancelado/devolvido. */
   function reativarSeSemCancelamento(pedidoId, exceptId) {
-    const outro = Store.list('ocorrencias').some((x) => x.id !== exceptId && x.pedido_id === pedidoId && x.tipo === 'cancelamento');
     const p = Store.get('pedidos', pedidoId);
-    if (p && !outro && p.status === 'cancelado') Store.save('pedidos', { id: pedidoId, status: 'ativo' });
+    if (!p || p.status === 'ativo') return;
+    const tipo = p.status === 'cancelado' ? 'cancelamento' : 'devolucao';
+    const outro = Store.list('ocorrencias').some((x) => x.id !== exceptId && x.pedido_id === pedidoId && x.tipo === tipo);
+    if (!outro) Store.save('pedidos', { id: pedidoId, status: 'ativo' });
+  }
+
+  /** Devolução total: todas as caixas do pedido foram devolvidas. */
+  function devolucaoTotal(ped, itens) {
+    const prods = (ped.itens || []).filter((i) => +i.caixas > 0);
+    return prods.length > 0 && prods.every((pi) => itens.filter((i) => i.produto_id === pi.produto_id).reduce((t, i) => t + i.caixas, 0) >= +pi.caixas - 0.001);
   }
 
   function editar(id) {
@@ -261,6 +289,7 @@
       const it = (o.itens || []).find((i) => i.produto_id === card.dataset.pid);
       const r = (o.reposicao || []).find((i) => i.produto_id === card.dataset.pid);
       card.querySelector('[data-k=caixas]').value = it ? it.caixas : '';
+      card.querySelector('[data-k=unidades]').value = it ? U.round2(it.caixas * ((D.produto(card.dataset.pid) || {}).unidades_caixa || 1)) : '';
       card.querySelector('[data-k=volta]').value = it && !it.volta_estoque ? '0' : '1';
       card.querySelector('[data-k=repo]').value = r ? r.caixas : '';
       if (r) card.querySelector('[data-k=repo]').dataset.touched = '1';
@@ -275,10 +304,10 @@
   async function excluir(id) {
     const o = Store.get('ocorrencias', id);
     const ok = await U.confirm(`Excluir a ocorrência nº ${o.numero} (${U.TIPOS_OCORRENCIA[o.tipo]} — ${o.cliente_nome})? O estoque será recalculado` +
-      (o.tipo === 'cancelamento' ? ' e o pedido volta a ficar ativo.' : '.'), { ok: 'Excluir', danger: true });
+      (o.tipo !== 'troca' ? ' e o pedido volta a ficar ativo, se estava cancelado/devolvido por ela.' : '.'), { ok: 'Excluir', danger: true });
     if (!ok) return;
     Store.remove('ocorrencias', id);
-    if (o.tipo === 'cancelamento') reativarSeSemCancelamento(o.pedido_id, id);
+    if (o.tipo !== 'troca') reativarSeSemCancelamento(o.pedido_id, id);
     U.toast('Ocorrência excluída');
   }
 
@@ -323,7 +352,7 @@
           <td data-l="Tipo"><span class="badge ${badge[o.tipo] || ''}">${U.TIPOS_OCORRENCIA[o.tipo] || o.tipo}</span></td>
           <td data-l="Cliente"><b>${U.esc(o.cliente_nome || '')}</b><span class="sub">${U.esc(U.fmtDoc(o.cnpj))}</span></td>
           <td data-l="Pedido">${p ? 'nº ' + p.numero : '—'}<span class="sub">${o.nota ? 'NF ' + U.esc(o.nota) : 'sem nota'}${o.nota_devolucao ? ' · NF dev. ' + U.esc(o.nota_devolucao) : ''}</span></td>
-          <td data-l="Itens">${(o.itens || []).map((i) => `${U.num(i.caixas)} cx ${nome(i.produto_id)} <span class="badge ${i.volta_estoque ? 'b-ok' : 'b-danger'}">${i.volta_estoque ? 'voltou' : 'perda'}</span>`).join('<br>') || '<span class="muted">—</span>'}</td>
+          <td data-l="Itens">${(o.itens || []).map((i) => `${D.qtd(i.caixas, i.produto_id)} ${nome(i.produto_id)} <span class="badge ${i.volta_estoque ? 'b-ok' : 'b-danger'}">${i.volta_estoque ? (o.tipo === 'cancelamento' ? 'não saiu' : 'voltou') : 'perda'}</span>`).join('<br>') || '<span class="muted">—</span>'}</td>
           <td data-l="Reposição">${(o.reposicao || []).map((i) => `${U.num(i.caixas)} cx ${nome(i.produto_id)}`).join('<br>') || '<span class="muted">—</span>'}</td>
           <td data-l="Motivo">${U.esc(o.motivo || '')}<span class="sub">${U.esc(o.observacao || '')}</span></td>
           <td class="row-actions">${p ? '<button class="btn btn-xs" data-act="ped">Pedido</button> ' : ''}<button class="btn btn-xs" data-act="edit">Editar</button> <button class="btn btn-xs btn-ghost-danger" data-act="del">Excluir</button></td>
