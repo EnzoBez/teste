@@ -51,7 +51,7 @@ Sem configuração, o sistema funciona em **modo local**: os dados ficam só no 
 2. No menu da esquerda, abra **SQL Editor**, cole todo o conteúdo do arquivo [`supabase/schema.sql`](supabase/schema.sql) e clique em **Run**.
 3. Em **Authentication → Users → Add user → Create new user**, crie o seu login (e-mail e senha) e marque **Auto Confirm User**.
 4. Em **Authentication → Sign In / Providers**, **desative "Allow new users to sign up"**. Assim, ninguém mais consegue criar conta no seu sistema.
-5. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public**.
+5. Em **Project Settings → API Keys**, copie a **Project URL** e a chave **publishable** (`sb_publishable_...`).
 
 ### 2. Ligar o site ao banco
 Abra `js/config.js` e preencha:
