@@ -131,7 +131,7 @@
         else if ((p.data_faturamento || p.data_pedido || '') >= lim) saidas30[it.produto_id] = (saidas30[it.produto_id] || 0) + (+it.caixas || 0);
       }
     }
-    const cores = ['#53A08E', '#B9A93C'];
+    const cores = ['#3E7A6A', '#C29B45'];
     U.$('#est-cards', root).innerHTML = D.produtos().map((p, i) => {
       const e = est[p.id];
       const proj = e.saldo - (pend[p.id] || 0);

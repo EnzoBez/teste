@@ -1,0 +1,7 @@
+/* Fontes da marca Ourosaf (licença SIL Open Font License), servidas pelo próprio site */
+@font-face { font-family: "Karla"; font-style: normal; font-weight: 400; font-display: swap; src: url("../fonts/karla-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Karla"; font-style: normal; font-weight: 500 600; font-display: swap; src: url("../fonts/karla-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Karla"; font-style: normal; font-weight: 650 750; font-display: swap; src: url("../fonts/karla-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Karla"; font-style: normal; font-weight: 751 900; font-display: swap; src: url("../fonts/karla-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "DM Serif Display"; font-style: normal; font-weight: 400; font-display: swap; src: url("../fonts/dm-serif-display-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "DM Serif Display"; font-style: italic; font-weight: 400; font-display: swap; src: url("../fonts/dm-serif-display-latin-400-italic.woff2") format("woff2"); }

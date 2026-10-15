@@ -35,7 +35,7 @@
             </div>
             <div class="f s4"><label>Data do pedido</label><input type="date" name="data_pedido"></div>
             <div class="f s4"><label>Prazo</label><input type="text" name="prazo" list="dl-prazos" placeholder="Ex.: 28 dias"></div>
-            <div class="f s4"><label>Nº pedido do cliente</label><input type="text" name="pedido_cliente" placeholder="Opcional"></div>
+            <div class="f s4"><label>Pedido do cliente</label><input type="text" name="pedido_cliente" placeholder="Opcional"></div>
           </div>
 
           <div class="section-title">Produtos</div>
@@ -671,7 +671,7 @@
         <div><span class="p-name">${U.esc(p.cliente_nome || '(sem cliente)')}</span><span class="p-meta">${badges ? badges + ' ' : ''}${U.esc(local || U.fmtDoc(p.cnpj))}${p.prazo ? ' · ' + U.esc(p.prazo) : ''}</span></div></div>
       <div class="p-vend"><span>${U.esc(p.vendedor || '—')}</span><span class="p-meta">${[p.pedido_cliente && 'Ped. ' + U.esc(p.pedido_cliente), p.observacao && U.esc(p.observacao)].filter(Boolean).join(' · ')}</span></div>
       <div class="p-items">${items || '<span class="muted">—</span>'}</div>
-      <div class="p-total">${U.money(p.total)}<small>nº ${p.numero || '—'}</small></div>
+      <div class="p-total">${U.money(p.total)}<small>Pedido ${p.numero || '—'}</small></div>
       <div class="p-flags"><button class="flag ${p.canhoto ? 'on' : ''}" data-act="canhoto" title="Canhoto ${p.canhoto ? 'assinado' + (p.canhoto_data ? ' em ' + U.date(p.canhoto_data) : '') : 'pendente'} — clique para alterar">${U.icon(p.canhoto ? 'check' : 'pen', 15)}${p.canhoto ? `<span class="flag-date">${p.canhoto_data ? U.date(p.canhoto_data).slice(0, 5) : 'ok'}</span>` : ''}</button></div>
       <div class="p-more"><button class="icon-btn" data-act="more" aria-label="Mais ações">${U.icon('more', 18)}</button></div>
     </div>`;

@@ -32,7 +32,7 @@
     const dark = document.documentElement.dataset.theme === 'dark';
     U.$('#btn-theme').innerHTML = U.icon(dark ? 'sun' : 'moon', 18);
     const meta = document.querySelector('meta[name=theme-color]');
-    if (meta) meta.content = dark ? '#0E1513' : '#F5F4EC';
+    if (meta) meta.content = dark ? '#0C1A17' : '#17302B';
   }
 
   function show(page) {
@@ -61,7 +61,7 @@
     sel.innerHTML = list.map((e) => `<option value="${e.id}" ${e.id === id ? 'selected' : ''}>${U.esc(e.nome)}</option>`).join('');
     sel.hidden = list.length < 2;
     const e = D.empresa();
-    U.$('#side-empresa').textContent = e ? 'Representação ' + e.nome : 'Gestão';
+    U.$('#side-empresa').textContent = e && D.empresas().length > 1 ? 'Representação · ' + e.nome : 'Representação comercial';
   }
 
   function onEmpresaChange(id) {

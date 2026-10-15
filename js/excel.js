@@ -23,7 +23,7 @@
   function estilizar(ws, nCols, nRows, corDaLinha) {
     for (let c = 0; c < nCols; c++) {
       const h = ws[XLSX.utils.encode_cell({ r: 0, c })];
-      if (h) h.s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '1F5A4D' } }, alignment: { vertical: 'center' } };
+      if (h) h.s = { font: { bold: true, color: { rgb: 'F7F3EA' } }, fill: { patternType: 'solid', fgColor: { rgb: '17302B' } }, alignment: { vertical: 'center' } };
     }
     if (!corDaLinha) return;
     for (let r = 1; r <= nRows; r++) {
