@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#163C35">
+  <title>Ourosaf Gestão</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23163C35'/%3E%3Ctext x='32' y='41' font-family='Arial' font-weight='800' font-size='24' fill='%23F7F0BA' text-anchor='middle'%3EOR%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- Tela de carregamento / login -->
+  <div id="splash" class="splash">
+    <div class="login">
+      <div class="brand"><div class="brand-logo">OR</div><div><b>OUROSAF</b><small>Gestão comercial</small></div></div>
+      <div id="loading">
+        <p class="muted mt" id="loading-msg">Carregando…</p>
+        <div class="progress"><div id="loading-bar"></div></div>
+      </div>
+      <form id="login-form" hidden>
+        <div class="f"><label for="login-email">E-mail</label><input id="login-email" type="email" autocomplete="username" required></div>
+        <div class="f"><label for="login-pass">Senha</label><input id="login-pass" type="password" autocomplete="current-password" required></div>
+        <div id="login-err" class="alert alert-danger" hidden></div>
+        <button class="btn btn-primary" type="submit">Entrar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Aplicação -->
+  <div id="app" class="app" hidden>
+    <aside class="side">
+      <div class="brand"><div class="brand-logo">OR</div><div><b>OUROSAF</b><small id="side-empresa">Gestão</small></div></div>
+      <div class="empresa-sel" id="empresa-sel-wrap" hidden><select id="empresa-sel" aria-label="Empresa representada"></select></div>
+      <nav class="nav">
+        <a href="#clientes" data-page="clientes"><span class="n">01</span>Clientes</a>
+        <a href="#pedidos" data-page="pedidos"><span class="n">02</span>Pedidos</a>
+        <a href="#estoque" data-page="estoque"><span class="n">03</span>Estoque</a>
+        <a href="#ocorrencias" data-page="ocorrencias"><span class="n">04</span>Ocorrências</a>
+      </nav>
+      <div class="side-stats">
+        <div>Clientes <b id="st-clientes">0</b></div>
+        <div>Pedidos <b id="st-pedidos">0</b></div>
+        <div>Sem nota <b id="st-semnota">0</b></div>
+      </div>
+      <div class="side-actions">
+        <a class="side-btn" href="#ajustes">Ajustes e backup</a>
+        <button class="side-btn" id="btn-sync" type="button">Atualizar dados</button>
+        <button class="side-btn" id="btn-logout" type="button">Sair da conta</button>
+      </div>
+      <div class="side-foot"><span class="dot" id="save-dot"></span><span id="save-msg">—</span></div>
+    </aside>
+    <div class="content">
+      <div class="mobile-top">
+        <div class="brand"><div class="brand-logo">OR</div><div><b>OUROSAF</b></div></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="empresa-sel-m" aria-label="Empresa representada" hidden></select>
+          <a class="side-btn" href="#ajustes" style="padding:5px 9px">⚙</a>
+        </div>
+      </div>
+      <main class="main" id="main">
+        <section id="page-clientes" data-page hidden></section>
+        <section id="page-pedidos" data-page hidden></section>
+        <section id="page-estoque" data-page hidden></section>
+        <section id="page-ocorrencias" data-page hidden></section>
+        <section id="page-ajustes" data-page hidden></section>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/vendor/supabase.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/domain.js"></script>
+  <script src="js/nfe.js"></script>
+  <script src="js/excel.js"></script>
+  <script src="js/pages/clientes.js"></script>
+  <script src="js/pages/pedidos.js"></script>
+  <script src="js/pages/estoque.js"></script>
+  <script src="js/pages/ocorrencias.js"></script>
+  <script src="js/pages/ajustes.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
