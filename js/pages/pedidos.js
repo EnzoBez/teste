@@ -4,7 +4,8 @@
 
   const DRAFT_KEY = 'ourosaf-draft-pedido';
   const PAGE = 150;
-  let root, form, tableEl;
+  let root, form_, listEl, drawer;
+  let form; // alias
   let editingId = null;
   let cliente = null;           // cliente selecionado no formulário
   let selected = new Set();
@@ -20,29 +21,11 @@
   function build(r) {
     root = r;
     const prods = produtos();
-    root.innerHTML = `
-      <div class="page-head">
-        <div><div class="eyebrow">Página 2</div><h1>Pedidos e faturamento</h1></div>
-        <div class="head-actions">
-          <button class="btn btn-soft" id="ped-importar">Importar notas (.zip)</button>
-          <button class="btn btn-primary" id="ped-novo">+ Novo pedido</button>
-        </div>
-      </div>
-      ${Store.mode === 'local' ? '<div class="local-banner"><b>Modo local:</b> os dados estão sendo salvos apenas neste navegador. Configure a nuvem (veja o README) para acessar de qualquer aparelho.</div>' : ''}
-
-      <div class="card" id="ped-form-card">
-        <div class="card-head">
-          <div><h2 id="ped-form-title">Digitar pedido</h2><div class="sub" id="ped-form-sub">Rascunho salvo automaticamente neste aparelho · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva</div></div>
-          <div class="actions"><button class="btn btn-sm" id="ped-cancelar-edicao" hidden>Cancelar edição</button><button class="btn btn-sm" id="ped-limpar">Limpar</button></div>
-        </div>
+    const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const formTpl = `
         <form id="ped-form" autocomplete="off">
           <div class="fields">
-            <div class="f s4"><span class="lbl">Tipo do pedido</span>
-              <div class="seg">${Object.entries(U.TIPOS_PEDIDO).map(([k, v]) => `<label><input type="radio" name="tipo" value="${k}" ${k === 'venda' ? 'checked' : ''}><span>${v}</span></label>`).join('')}</div></div>
-            <div class="f s2"><label>Data do pedido</label><input type="date" name="data_pedido"></div>
-            <div class="f s3"><label>Prazo de pagamento</label><input type="text" name="prazo" list="dl-prazos" placeholder="Ex.: 28 dias"></div>
-            <div class="f s3"><label>Nº pedido do cliente</label><input type="text" name="pedido_cliente" placeholder="Opcional"></div>
-
+            <div class="f s12"><div class="seg">${Object.entries(U.TIPOS_PEDIDO).map(([k, v]) => `<label><input type="radio" name="tipo" value="${k}" ${k === 'venda' ? 'checked' : ''}><span>${v}</span></label>`).join('')}</div></div>
             <div class="f s12"><label>Cliente <span class="req">*</span></label>
               <div class="ac" id="ped-cli-ac">
                 <input type="text" id="ped-cli-q" placeholder="Digite CNPJ ou nome do cliente…" autocomplete="off">
@@ -50,58 +33,75 @@
               </div>
               <div class="client-pill" id="ped-cli-pill" hidden></div>
             </div>
-
-            <div class="f s4"><label>Vendedor</label><input type="text" name="vendedor" list="dl-vend-ped" placeholder="Ex.: OUROSAF - ELI"></div>
-            <div class="f s4"><label>E-mail do cliente</label><input type="email" name="cliente_email"></div>
-            <div class="f s2"><label>Cidade</label><input type="text" name="cidade"></div>
-            <div class="f s2"><label>Bairro</label><input type="text" name="bairro"></div>
-            <div class="f s4"><label>Transporte</label><input type="text" name="transporte" list="dl-transportes"></div>
-            <div class="f s4"><label>Anotação do canhoto</label><input type="text" name="anotacao_canhoto"></div>
+            <div class="f s4"><label>Data do pedido</label><input type="date" name="data_pedido"></div>
+            <div class="f s4"><label>Prazo</label><input type="text" name="prazo" list="dl-prazos" placeholder="Ex.: 28 dias"></div>
+            <div class="f s4"><label>Nº pedido do cliente</label><input type="text" name="pedido_cliente" placeholder="Opcional"></div>
           </div>
 
+          <div class="section-title">Produtos</div>
           <div class="prod-grid">
             ${prods.map((p) => `
               <div class="prod" data-pid="${p.id}">
-                <div class="prod-head"><div><div class="eyebrow">Produto</div><h3>${U.esc(p.nome)}</h3></div><span class="badge b-info">${U.int(p.unidades_caixa)} un./caixa</span></div>
+                <div class="prod-head"><h3>${U.esc(p.nome)}</h3><span class="badge b-mute">${U.int(p.unidades_caixa)} un/cx</span></div>
                 <div class="fields">
-                  <div class="f"><label>Caixas</label><input type="number" min="0" step="any" inputmode="decimal" data-k="caixas" placeholder="0"></div>
-                  <div class="f"><label>Unidades</label><input type="text" data-k="unidades" readonly tabindex="-1" value="0"></div>
-                  <div class="f"><label>Valor unitário (R$)</label><input type="text" inputmode="decimal" data-k="valor_unitario" placeholder="0,00"><span class="last-price" data-last hidden></span></div>
-                  <div class="f"><label>Valor da caixa</label><input type="text" data-k="valor_caixa" readonly tabindex="-1" value="R$ 0,00"></div>
-                  <div class="total-line"><span class="muted">Total ${U.esc(p.nome.toLowerCase())}</span><b data-k="total">R$ 0,00</b></div>
+                  <div class="f"><label>Caixas</label>
+                    <div class="stepper"><button type="button" tabindex="-1" data-step="-1" aria-label="Menos uma caixa">${U.icon('minus', 16)}</button>
+                    <input type="number" min="0" step="any" inputmode="decimal" data-k="caixas" placeholder="0">
+                    <button type="button" tabindex="-1" data-step="1" aria-label="Mais uma caixa">${U.icon('plus', 16)}</button></div></div>
+                  <div class="f"><label>Valor unitário (R$)</label><input type="text" inputmode="decimal" data-k="valor_unitario" placeholder="0,00"></div>
+                  <input type="text" data-k="unidades" readonly tabindex="-1"><input type="text" data-k="valor_caixa" readonly tabindex="-1">
+                  <div class="calc"><span data-k="info">0 un · R$ 0,00/cx</span><span class="last-price" data-last hidden></span></div>
+                  <div class="total-line"><span class="muted">Total</span><b data-k="total">R$ 0,00</b></div>
                 </div>
               </div>`).join('') || '<div class="alert alert-warn">Nenhum produto cadastrado para esta empresa. Cadastre em Ajustes.</div>'}
           </div>
 
-          <div class="order-foot">
-            <div class="total-box"><small>Valor total do pedido</small><div id="ped-total">R$ 0,00</div></div>
-            <div class="fields">
-              <div class="f s12"><label>Observação</label><input type="text" name="observacao" list="dl-obs" placeholder="Ex.: entregar pela manhã"></div>
-              <div class="f s3"><label>Nota fiscal</label><input type="text" name="nota" inputmode="numeric" placeholder="Depois do faturamento"></div>
-              <div class="f s3"><label>Data do faturamento</label><input type="date" name="data_faturamento"></div>
-              <div class="f s3"><label>Destaque da linha</label><select name="destaque">${U.DESTAQUES.map((d) => `<option value="${d.v}">${d.label}</option>`).join('')}</select></div>
-              <div class="f s3" style="justify-content:flex-end"><label class="check"><input type="checkbox" name="canhoto"> Canhoto assinado</label></div>
-            </div>
-            <button type="submit" class="btn btn-primary" style="min-height:48px;padding:0 26px" id="ped-salvar">Salvar pedido</button>
+          <div class="section-title">Entrega e cobrança</div>
+          <div class="fields">
+            <div class="f s4"><label>Vendedor</label><input type="text" name="vendedor" list="dl-vend-ped" placeholder="Ex.: OUROSAF - ELI"></div>
+            <div class="f s4"><label>Transporte</label><input type="text" name="transporte" list="dl-transportes"></div>
+            <div class="f s4"><label>Anotação do canhoto</label><input type="text" name="anotacao_canhoto"></div>
+            <div class="f s4"><label>E-mail do cliente</label><input type="email" name="cliente_email"></div>
+            <div class="f s4"><label>Cidade</label><input type="text" name="cidade"></div>
+            <div class="f s4"><label>Bairro</label><input type="text" name="bairro"></div>
+            <div class="f s12"><label>Observação</label><input type="text" name="observacao" list="dl-obs" placeholder="Ex.: entregar pela manhã"></div>
           </div>
-        </form>
-      </div>
 
-      <div class="card">
-        <div class="card-head">
-          <div><div class="eyebrow">Histórico e faturamento</div><h2>Pedidos digitados</h2></div>
-          <div class="actions">
-            <button class="btn btn-sm" id="ped-sel-vis">Selecionar visíveis</button>
-            <button class="btn btn-sm" id="ped-sel-limpar">Limpar seleção</button>
-            <button class="btn btn-sm btn-primary" id="ped-excel">Gerar Excel</button>
+          <div class="section-title">Faturamento</div>
+          <div class="fields">
+            <div class="f s3"><label>Nota fiscal</label><input type="text" name="nota" inputmode="numeric" placeholder="Depois do faturamento"></div>
+            <div class="f s3"><label>Data do faturamento</label><input type="date" name="data_faturamento"></div>
+            <div class="f s3"><label>Destaque</label><select name="destaque">${U.DESTAQUES.map((d) => `<option value="${d.v}">${d.label}</option>`).join('')}</select></div>
+            <div class="f s3" style="justify-content:flex-end;padding-bottom:9px"><label class="check"><input type="checkbox" name="canhoto"> Canhoto assinado</label></div>
           </div>
+        </form>`;
+    root.innerHTML = `
+      <div class="page-head">
+        <div><div class="eyebrow">Pedidos e faturamento</div><h1>Pedidos</h1><div class="page-sub">${hoje.charAt(0).toUpperCase() + hoje.slice(1)}</div></div>
+        <div class="head-actions">
+          <button class="btn" id="ped-importar">${U.icon('upload', 16)} Importar notas</button>
+          <button class="btn" id="ped-excel">${U.icon('download', 16)} Excel</button>
+          <button class="btn btn-primary" id="ped-novo">${U.icon('plus', 16)} Novo pedido <kbd style="background:rgba(255,255,255,.15);border-color:transparent;color:inherit">N</kbd></button>
         </div>
+      </div>
+      ${Store.mode === 'local' ? '<div class="local-banner"><b>Modo local:</b> os dados estão sendo salvos apenas neste navegador.</div>' : ''}
+      <div class="kpis" id="ped-kpis"></div>
+
+      <div class="toolbar">
+        <div class="search">${U.icon('search', 16)}<input type="search" data-f="q" placeholder="Buscar cliente, CNPJ, nota, cidade…  ( / )"></div>
         <div class="chips" id="ped-chips">
-          ${[['recentes', 'Últimos 60 dias'], ['hoje', 'Hoje'], ['semnota', 'Sem nota'], ['semana', 'Esta semana'], ['mes', 'Este mês'], ['mespassado', 'Mês passado'], ['canhoto', 'Canhoto pendente'], ['tudo', 'Histórico completo']]
+          ${[['recentes', 'Últimos 60 dias'], ['hoje', 'Hoje'], ['semnota', 'Sem nota'], ['semana', 'Semana'], ['mes', 'Mês'], ['mespassado', 'Mês passado'], ['canhoto', 'Canhoto pendente'], ['tudo', 'Tudo']]
             .map(([k, v]) => `<button class="chip ${k === chip ? 'on' : ''}" data-chip="${k}">${v}</button>`).join('')}
         </div>
-        <div class="filters" id="ped-filters">
-          <div class="f wide"><label>Busca geral</label><input type="search" data-f="q" placeholder="Cliente, CNPJ, cidade, bairro, nota, nº…"></div>
+        <span class="grow"></span>
+        <select id="ped-sort" class="btn" style="width:auto;min-height:36px" aria-label="Ordenar">
+          <option value="data:-1">Mais recentes</option><option value="data:1">Mais antigos</option><option value="total:-1">Maior valor</option>
+          <option value="cliente:1">Cliente A–Z</option><option value="nota:-1">Nº da nota</option><option value="fat:-1">Data de faturamento</option>
+        </select>
+        <button class="btn" id="ped-filtros-btn">${U.icon('filter', 16)} Filtros <span class="badge b-info" id="ped-filtros-n" hidden></span></button>
+      </div>
+      <div class="filters-panel" id="ped-filtros" hidden>
+        <div class="filters">
           <div class="f"><label>Vendedor / observação</label><input type="search" data-f="obs" list="dl-vend-ped"></div>
           <div class="f"><label>Nota exata</label><input type="search" data-f="nota" inputmode="numeric"></div>
           <div class="f"><label>Período por</label><select data-f="campoData"><option value="data_pedido">Data do pedido</option><option value="data_faturamento">Data do faturamento</option></select></div>
@@ -116,14 +116,23 @@
           <div class="f"><label>Destaque</label><select data-f="destaque"><option value="*">Todos</option>${U.DESTAQUES.map((d) => `<option value="${d.v}">${d.label}</option>`).join('')}</select></div>
           <div class="f"><button class="btn" id="ped-limpar-filtros">Limpar filtros</button></div>
         </div>
-        <div class="summary" id="ped-summary"></div>
-        <div class="table-wrap" style="max-height:75vh"><table class="t cards" id="ped-table"></table></div>
-        <div class="list-foot"><span id="ped-foot"></span><button class="btn btn-sm" id="ped-mais" hidden>Mostrar mais</button></div>
       </div>
-      <div id="ped-dls"></div>`;
+      <div class="bulkbar" id="ped-bulk" hidden><span id="ped-bulk-n"></span><span class="grow" style="flex:1"></span>
+        <button class="btn btn-sm" id="ped-sel-vis">Selecionar visíveis</button><button class="btn btn-sm" id="ped-bulk-excel">${U.icon('download', 14)} Excel dos selecionados</button><button class="btn btn-sm" id="ped-sel-limpar">Limpar</button></div>
+      <div class="summary" id="ped-summary"></div>
+      <div class="plist" id="ped-list"></div>
+      <div class="list-foot"><span id="ped-foot"></span><button class="btn btn-sm" id="ped-mais" hidden>Mostrar mais</button></div>
+      <div id="ped-dls"></div>
+      ${U.drawerHtml('ped-drawer', {
+        title: 'Novo pedido', sub: 'Rascunho salvo automaticamente · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva', body: formTpl, wide: true,
+        foot: `<div class="total-box"><small>Total do pedido</small><div id="ped-total">R$ 0,00</div></div><span style="flex:1"></span>
+          <button type="button" class="btn btn-ghost" id="ped-limpar">Limpar</button>
+          <button type="submit" form="ped-form" class="btn btn-primary btn-lg" id="ped-salvar">Salvar pedido</button>`,
+      })}`;
 
-    form = U.$('#ped-form', root);
-    tableEl = U.$('#ped-table', root);
+    form = form_ = U.$('#ped-form', root);
+    listEl = U.$('#ped-list', root);
+    drawer = U.$('#ped-drawer', root);
     datalists();
     bindForm();
     bindList();
@@ -245,9 +254,22 @@
       if (e.target.value && !fat.value) fat.value = U.today();
     });
     U.$('#ped-limpar', root).onclick = () => { reset(); U.$('#ped-cli-q', root).focus(); };
-    U.$('#ped-novo', root).onclick = () => { reset(); U.$('#ped-form-card', root).scrollIntoView({ behavior: 'smooth' }); U.$('#ped-cli-q', root).focus(); };
-    U.$('#ped-cancelar-edicao', root).onclick = () => reset();
+    U.$('#ped-novo', root).onclick = () => abrirNovo();
     U.$('#ped-importar', root).onclick = importarNotas;
+    // Ao fechar o painel durante uma edição, descarta a edição (o rascunho de pedido novo continua salvo)
+    drawer.addEventListener('drawer-close', () => { if (editingId) reset(); });
+    U.$$('.stepper button', root).forEach((b) => {
+      b.onclick = () => {
+        const inp = b.parentElement.querySelector('input');
+        inp.value = Math.max(0, U.parseNum(inp.value) + +b.dataset.step) || '';
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+    });
+  }
+
+  function abrirNovo() {
+    if (editingId) reset();
+    U.openDrawer(drawer, cliente ? '.prod [data-k=caixas]' : '#ped-cli-q');
   }
 
   async function cadastroRapido(cnpj, nome) {
@@ -298,6 +320,10 @@
       let ult = null;
       for (const p of Store.list('pedidos')) if (U.digits(p.cnpj) === d && p.vendedor && (!ult || (p.data_pedido || '') > (ult.data_pedido || ''))) ult = p;
       set('vendedor', ult ? ult.vendedor : c.vendedor);
+      // Prazo e transporte: repete os do último pedido deste cliente
+      let ultP = null;
+      for (const p of Store.list('pedidos')) if (U.digits(p.cnpj) === d && p.prazo && p.tipo === 'venda' && (!ultP || (p.data_pedido || '') > (ultP.data_pedido || ''))) ultP = p;
+      if (ultP && !form.querySelector('[name=prazo]').value) set('prazo', ultP.prazo);
     }
     // Último preço praticado
     U.$$('.prod', root).forEach((card) => {
@@ -308,7 +334,8 @@
       if (last != null) {
         if (!vu.value && !keepFields) vu.value = last.toFixed(2).replace('.', ',');
         tag.dataset.v = last.toFixed(2).replace('.', ',');
-        tag.textContent = `Último preço: ${U.money(last)} (usar)`;
+        tag.textContent = `Último: ${U.money(last)}`;
+        tag.title = 'Clique para usar o último preço praticado com este cliente';
         tag.hidden = false;
       } else tag.hidden = true;
     });
@@ -334,6 +361,7 @@
       const vu = U.parseNum(card.querySelector('[data-k=valor_unitario]').value);
       card.querySelector('[data-k=unidades]').value = U.num(cx * upc);
       card.querySelector('[data-k=valor_caixa]').value = U.money(vu * upc);
+      card.querySelector('[data-k=info]').textContent = `${U.int(cx * upc)} un · ${U.money(vu * upc)}/cx`;
       card.querySelector('[data-k=total]').textContent = U.money(cx * upc * vu);
       card.classList.toggle('has-qty', cx > 0);
     });
@@ -347,9 +375,8 @@
     U.$$('.prod input[data-k=caixas], .prod input[data-k=valor_unitario]', root).forEach((i) => { i.value = ''; });
     selectCliente(null);
     calc();
-    U.$('#ped-form-title', root).textContent = 'Digitar pedido';
-    U.$('#ped-form-sub', root).innerHTML = 'Rascunho salvo automaticamente neste aparelho · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva';
-    U.$('#ped-cancelar-edicao', root).hidden = true;
+    U.$('#ped-drawer-title', root).textContent = 'Novo pedido';
+    U.$('#ped-drawer-sub', root).innerHTML = 'Rascunho salvo automaticamente · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva';
     U.$('#ped-salvar', root).textContent = 'Salvar pedido';
     localStorage.removeItem(DRAFT_KEY);
   }
@@ -392,11 +419,10 @@
       { id: null, razao_social: p.cliente_nome, cnpj: p.cnpj, cidade: p.cidade, bairro: p.bairro };
     selectCliente(c, true);
     calc();
-    U.$('#ped-form-title', root).textContent = `Editando pedido nº ${p.numero || ''}`;
-    U.$('#ped-form-sub', root).textContent = `${p.cliente_nome || ''} · digitado em ${U.date(p.data_pedido)}`;
-    U.$('#ped-cancelar-edicao', root).hidden = false;
+    U.$('#ped-drawer-title', root).textContent = `Pedido nº ${p.numero || ''}`;
+    U.$('#ped-drawer-sub', root).textContent = `${p.cliente_nome || ''} · digitado em ${U.date(p.data_pedido)}${p.nota ? ' · NF ' + p.nota : ''}`;
     U.$('#ped-salvar', root).textContent = 'Salvar alterações';
-    U.$('#ped-form-card', root).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    U.openDrawer(drawer);
   }
 
   function salvar() {
@@ -428,9 +454,10 @@
       nota: f.nota ? U.digits(f.nota) || f.nota : '',
     };
     const saved = Store.save('pedidos', ped);
-    U.toast(old ? `Pedido nº ${saved.numero} atualizado` : `Pedido nº ${saved.numero} salvo — ${U.money(saved.total)}`);
+    U.toast(old ? `Pedido nº ${saved.numero} atualizado` : `Pedido nº ${saved.numero} salvo — ${U.money(saved.total)}. Pronto para o próximo.`);
     reset();
-    U.$('#ped-cli-q', root).focus();
+    if (old) U.closeDrawer(drawer);
+    else U.$('#ped-cli-q', root).focus();
   }
 
   // =============================================================
@@ -448,6 +475,9 @@
         re();
       }, 150));
     });
+    U.$('#ped-sort', root).onchange = (e) => { const [k, d] = e.target.value.split(':'); sort = { k, dir: +d }; re(); };
+    U.$('#ped-filtros-btn', root).onclick = () => { const p = U.$('#ped-filtros', root); p.hidden = !p.hidden; };
+    U.$('#ped-kpis', root).onclick = (e) => { const b = e.target.closest('[data-chip]'); if (b) applyChip(b.dataset.chip, true); };
     U.$('#ped-limpar-filtros', root).onclick = () => {
       U.$$('[data-f]', root).forEach((el) => { el.value = el.tagName === 'SELECT' ? el.options[0].value : ''; });
       applyChip('recentes', true);
@@ -455,50 +485,61 @@
     U.$('#ped-mais', root).onclick = () => { limit += PAGE * 2; renderList(); };
     U.$('#ped-sel-vis', root).onclick = () => { filtered().slice(0, limit).forEach((p) => selected.add(p.id)); renderList(); };
     U.$('#ped-sel-limpar', root).onclick = () => { selected.clear(); renderList(); };
-    U.$('#ped-excel', root).onclick = () => {
+    const excel = () => {
       const list = selected.size ? D.pedidos().filter((p) => selected.has(p.id)) : filtered();
       if (!list.length) { U.toast('Nenhum pedido para exportar', 'warn'); return; }
       Excel.pedidos(list);
       U.toast(`Excel gerado com ${list.length} pedido(s)` + (selected.size ? ' selecionados' : ' filtrados'));
     };
+    U.$('#ped-excel', root).onclick = excel;
+    U.$('#ped-bulk-excel', root).onclick = excel;
 
-    tableEl.addEventListener('click', (e) => {
-      const th = e.target.closest('th[data-k]');
-      if (th) { sort = { k: th.dataset.k, dir: sort.k === th.dataset.k ? -sort.dir : -1 }; renderList(); return; }
-      const tr = e.target.closest('tr[data-id]');
-      if (!tr) return;
-      const id = tr.dataset.id;
+    listEl.addEventListener('click', async (e) => {
+      const row = e.target.closest('.prow[data-id]');
+      if (!row) return;
+      const id = row.dataset.id;
       const act = e.target.closest('[data-act]');
       if (!act) return;
       const a = act.dataset.act;
       if (a === 'nota') editarNotaInline(act, id);
       if (a === 'edit') editar(id);
-      if (a === 'dup') duplicar(id);
-      if (a === 'del') excluir(id);
-      if (a === 'ocorr') Pages.ocorrencias.novaPara(id);
       if (a === 'canhoto') {
         const p = Store.get('pedidos', id);
         Store.save('pedidos', { id, canhoto: !p.canhoto });
       }
-    });
-    tableEl.addEventListener('change', (e) => {
-      const tr = e.target.closest('tr[data-id]');
-      if (!tr) return;
-      if (e.target.matches('[data-sel]')) {
-        if (e.target.checked) selected.add(tr.dataset.id); else selected.delete(tr.dataset.id);
-        tr.classList.toggle('sel', e.target.checked);
-        summary(filtered());
-      }
-      if (e.target.matches('[data-more]')) {
-        const v = e.target.value;
-        e.target.value = '';
-        const id = tr.dataset.id;
+      if (a === 'more') {
+        const p = Store.get('pedidos', id);
+        const v = await U.menu(act, [
+          { label: 'Abrir / editar', value: 'edit', icon: 'edit' },
+          { label: 'Repetir pedido', value: 'dup', icon: 'copy' },
+          { label: 'Ocorrência (cancelar, devolver, trocar)', value: 'ocorr', icon: 'undo' },
+          '-',
+          ...U.DESTAQUES.map((d) => ({ label: d.label, value: 'dest:' + d.v, swatch: d.v, checked: (p.destaque || '') === d.v })),
+          '-',
+          { label: 'Excluir pedido', value: 'del', icon: 'trash', danger: true },
+        ]);
+        if (!v) return;
+        if (v === 'edit') editar(id);
+        if (v === 'dup') duplicar(id);
+        if (v === 'ocorr') Pages.ocorrencias.novaPara(id);
+        if (v === 'del') excluir(id);
         if (v.startsWith('dest:')) Store.save('pedidos', { id, destaque: v.slice(5) });
-        else if (v === 'dup') duplicar(id);
-        else if (v === 'ocorr') Pages.ocorrencias.novaPara(id);
-        else if (v === 'del') excluir(id);
       }
     });
+    listEl.addEventListener('change', (e) => {
+      const row = e.target.closest('.prow[data-id]');
+      if (!row || !e.target.matches('[data-sel]')) return;
+      if (e.target.checked) selected.add(row.dataset.id); else selected.delete(row.dataset.id);
+      row.classList.toggle('sel', e.target.checked);
+      bulk();
+    });
+  }
+
+  function bulk() {
+    U.$('#ped-bulk', root).hidden = !selected.size;
+    if (!selected.size) return;
+    const sel = D.pedidos().filter((p) => selected.has(p.id));
+    U.$('#ped-bulk-n', root).textContent = `${selected.size} selecionado(s) · ${U.money(sel.reduce((t, p) => t + (+p.total || 0), 0))}`;
   }
 
   function setChipUI(k) {
@@ -523,7 +564,7 @@
       set('de', iso(first)); set('ate', iso(last));
     }
     if (k === 'semnota') { set('de', ''); set('ate', ''); set('fat', 'sem'); }
-    if (k === 'canhoto') { set('de', ''); set('ate', ''); set('fat', 'com'); set('canhoto', 'pend'); }
+    if (k === 'canhoto') { set('de', U.addDays(t, -90)); set('ate', ''); set('fat', 'com'); set('canhoto', 'pend'); }
     if (k === 'tudo') { set('de', ''); set('ate', ''); set('status', ''); }
     if (render) { limit = PAGE; renderList(); }
   }
@@ -539,7 +580,7 @@
     const q = U.norm(f.q), qd = U.digits(f.q);
     const obs = U.norm(f.obs);
     const notaD = U.digits(f.nota);
-    let rows = D.pedidos().filter((p) => {
+    const rows = D.pedidos().filter((p) => {
       if (f.status && (p.status || 'ativo') !== f.status) return false;
       if (f.fat === 'sem' && p.nota) return false;
       if (f.fat === 'com' && !p.nota) return false;
@@ -565,58 +606,104 @@
       if (k === 'data') return (p.data_pedido || '') + String(p.numero || 0).padStart(8, '0');
       if (k === 'fat') return p.data_faturamento || '';
       if (k === 'cliente') return U.norm(p.cliente_nome);
-      if (k === 'cidade') return U.norm(p.cidade);
       if (k === 'nota') return +U.digits(p.nota) || 0;
       if (k === 'total') return +p.total || 0;
-      if (k.startsWith('p:')) return D.caixasDe(p, k.slice(2));
       return '';
     };
     return rows.sort((a, b) => { const va = val(a), vb = val(b); return va < vb ? -dir : va > vb ? dir : 0; });
   }
 
+  function kpis() {
+    const t = U.today();
+    const mes = t.slice(0, 8);
+    const prods = produtos();
+    let hojeN = 0, hojeV = 0, mesV = 0, mesN = 0, semNota = 0, canh = 0;
+    const hojeCx = {};
+    const lim = U.addDays(t, -90);
+    for (const p of D.pedidos()) {
+      if (p.status === 'cancelado') continue;
+      if (p.data_pedido === t) { hojeN++; hojeV += +p.total || 0; for (const i of p.itens || []) hojeCx[i.produto_id] = (hojeCx[i.produto_id] || 0) + (+i.caixas || 0); }
+      if ((p.data_pedido || '').startsWith(mes) && p.tipo !== 'bonificacao') { mesV += +p.total || 0; mesN++; }
+      if (!p.nota && p.status === 'ativo') semNota++;
+      if (p.nota && !p.canhoto && p.status === 'ativo' && (p.data_pedido || '') >= lim) canh++;
+    }
+    U.$('#ped-kpis', root).innerHTML = `
+      <button class="kpi hero" data-chip="hoje"><small>Hoje</small><b>${U.money(hojeV)}</b><span>${hojeN} pedido(s) · ${prods.map((p) => `${U.num(hojeCx[p.id] || 0)} cx ${U.esc(p.nome.toLowerCase())}`).join(' · ')}</span></button>
+      <button class="kpi" data-chip="mes"><small>Vendas no mês</small><b>${U.money(mesV)}</b><span>${U.int(mesN)} pedidos de venda</span></button>
+      <button class="kpi ${semNota ? 'warn' : ''}" data-chip="semnota"><small>Aguardando nota</small><b>${U.int(semNota)}</b><span>pedidos sem faturamento</span></button>
+      <button class="kpi" data-chip="canhoto"><small>Canhoto pendente</small><b>${U.int(canh)}</b><span>faturados nos últimos 90 dias</span></button>`;
+  }
+
   function summary(rows) {
     const prods = produtos();
     const tot = rows.reduce((s, p) => s + (+p.total || 0), 0);
-    const semNota = rows.filter((p) => !p.nota).length;
-    U.$('#ped-summary', root).innerHTML = `<span>Pedidos: <b>${U.int(rows.length)}</b></span>` +
-      prods.map((pr) => `<span>${U.esc(pr.nome)}: <b>${U.num(rows.reduce((s, p) => s + D.caixasDe(p, pr.id), 0))} cx</b></span>`).join('') +
-      `<span>Valor: <b>${U.money(tot)}</b></span><span>Sem nota: <b>${U.int(semNota)}</b></span>` +
-      (selected.size ? `<span class="badge b-info">${selected.size} selecionado(s)</span>` : '');
+    U.$('#ped-summary', root).innerHTML = `<span><b>${U.int(rows.length)}</b> pedidos</span>` +
+      prods.map((pr) => `<span>${U.esc(pr.nome)} <b>${U.num(rows.reduce((s, p) => s + D.caixasDe(p, pr.id), 0))} cx</b></span>`).join('') +
+      `<span>Total <b>${U.money(tot)}</b></span>`;
+    const f = filters();
+    const n = ['obs', 'nota', 'tipo', 'produto', 'cidade', 'canhoto', 'fat'].filter((k) => f[k]).length + (f.destaque !== '*' ? 1 : 0) + (f.status !== 'ativo' ? 1 : 0);
+    const badge = U.$('#ped-filtros-n', root);
+    badge.hidden = !n;
+    badge.textContent = n;
+  }
+
+  function rowHtml(p, prods) {
+    const cls = ['prow', selected.has(p.id) && 'sel', p.status === 'cancelado' && 'cancelado', p.destaque && 'hl-' + p.destaque].filter(Boolean).join(' ');
+    const badges = [p.tipo === 'bonificacao' && '<span class="badge b-warn">Bonificação</span>', p.tipo === 'troca' && '<span class="badge b-info">Troca</span>',
+      p.status === 'cancelado' && '<span class="badge b-danger">Cancelado</span>', p.status === 'devolvido' && '<span class="badge b-warn">Devolvido</span>'].filter(Boolean).join(' ');
+    const items = prods.map((pr, i) => {
+      const cx = D.caixasDe(p, pr.id);
+      return cx ? `<span class="qty q${i % 2}">${U.num(cx)} cx <i>${U.esc(pr.nome)}</i></span>` : '';
+    }).join('');
+    const local = [p.cidade, p.bairro].filter(Boolean).join(' · ');
+    return `<div class="${cls}" data-id="${p.id}">
+      <label class="cb"><input type="checkbox" data-sel ${selected.has(p.id) ? 'checked' : ''} aria-label="Selecionar pedido"></label>
+      <div class="p-client" data-act="edit" title="Abrir pedido"><span class="avatar" style="--h:${U.hue(p.cliente_nome)}">${U.esc(U.initials(p.cliente_nome))}</span>
+        <div><span class="p-name">${U.esc(p.cliente_nome || '(sem cliente)')}</span><span class="p-meta">${badges ? badges + ' ' : ''}${U.esc(local || U.fmtDoc(p.cnpj))}${p.prazo ? ' · ' + U.esc(p.prazo) : ''}</span></div></div>
+      <div class="p-vend"><span>${U.esc(p.vendedor || '—')}</span><span class="p-meta">${[p.pedido_cliente && 'Ped. ' + U.esc(p.pedido_cliente), p.observacao && U.esc(p.observacao)].filter(Boolean).join(' · ')}</span></div>
+      <div class="p-items">${items || '<span class="muted">—</span>'}</div>
+      <div class="p-total">${U.money(p.total)}<small>nº ${p.numero || '—'}</small></div>
+      <div class="p-nota"><button class="nota-btn ${p.nota ? 'has' : ''}" data-act="nota" title="Clique para ${p.nota ? 'alterar' : 'lançar'} a nota">${p.nota ? 'NF ' + U.esc(p.nota) : 'Sem nota'}</button></div>
+      <div class="p-flags"><button class="flag ${p.canhoto ? 'on' : ''}" data-act="canhoto" title="Canhoto ${p.canhoto ? 'assinado' : 'pendente'} — clique para alterar">${U.icon(p.canhoto ? 'check' : 'pen', 15)}</button></div>
+      <div class="p-more"><button class="icon-btn" data-act="more" aria-label="Mais ações">${U.icon('more', 18)}</button></div>
+    </div>`;
   }
 
   function renderList() {
-    if (!tableEl) return;
+    if (!listEl) return;
+    kpis();
     const prods = produtos();
     const rows = filtered();
     summary(rows);
-    const arrow = (k) => (sort.k === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : '');
-    const head = `<thead><tr><th></th><th class="sortable" data-k="nota">Nota${arrow('nota')}</th><th class="sortable" data-k="data">Data${arrow('data')}</th>
-      <th class="sortable" data-k="cliente">Cliente${arrow('cliente')}</th><th class="sortable" data-k="cidade">Cidade${arrow('cidade')}</th><th>Vendedor / obs.</th>
-      ${prods.map((p) => `<th class="sortable num" data-k="p:${p.id}">${U.esc(p.nome)}${arrow('p:' + p.id)}</th>`).join('')}
-      <th class="sortable num" data-k="total">Total${arrow('total')}</th><th></th></tr></thead>`;
-    const body = rows.slice(0, limit).map((p) => {
-      const cls = [selected.has(p.id) && 'sel', p.status === 'cancelado' && 'cancelado', p.destaque && 'hl-' + p.destaque, p.canhoto && 'canhoto-ok'].filter(Boolean).join(' ');
-      const tipo = p.tipo && p.tipo !== 'venda' ? `<span class="badge ${p.tipo === 'bonificacao' ? 'b-warn' : 'b-info'}">${U.TIPOS_PEDIDO[p.tipo]}</span> ` : '';
-      return `<tr data-id="${p.id}" class="${cls}">
-        <td><input type="checkbox" data-sel ${selected.has(p.id) ? 'checked' : ''} aria-label="Selecionar"></td>
-        <td data-l="Nota"><button class="nota-btn ${p.nota ? 'has' : ''}" data-act="nota">${p.nota ? U.esc(p.nota) : 'SEM NOTA'}</button><span class="sub">nº ${p.numero || '—'} ${p.status === 'cancelado' ? '<span class="badge b-danger">Cancelado</span>' : p.status === 'devolvido' ? '<span class="badge b-warn">Devolvido</span>' : ''}</span></td>
-        <td data-l="Data">${U.date(p.data_pedido)}${p.data_faturamento ? `<span class="sub">Fat.: ${U.date(p.data_faturamento)}</span>` : ''}</td>
-        <td data-l="Cliente" class="nm">${tipo}<b>${U.esc(p.cliente_nome || '')}</b><span class="sub">${U.esc(U.fmtDoc(p.cnpj))}${p.prazo ? ' · ' + U.esc(p.prazo) : ''}</span></td>
-        <td data-l="Cidade">${U.esc(p.cidade || '')}<span class="sub">${U.esc(p.bairro || '')}</span></td>
-        <td data-l="Vendedor">${U.esc(p.vendedor || '')}${p.pedido_cliente ? `<span class="sub">Ped. ${U.esc(p.pedido_cliente)}</span>` : ''}${p.observacao ? `<span class="sub">${U.esc(p.observacao)}</span>` : ''}</td>
-        ${prods.map((pr) => {
-          const it = (p.itens || []).find((i) => i.produto_id === pr.id);
-          const cx = it ? +it.caixas : 0;
-          return `<td data-l="${U.esc(pr.nome)}" class="num">${cx ? `<b>${U.num(cx)} cx</b><span class="sub">${U.int(cx * pr.unidades_caixa)} un · ${U.money(it.valor_unitario)}</span>` : '<span class="muted">—</span>'}</td>`;
-        }).join('')}
-        <td data-l="Total" class="num"><b>${U.money(p.total)}</b><span class="sub"><button class="btn btn-xs ${p.canhoto ? 'canhoto-on' : ''}" data-act="canhoto" title="Canhoto: clique para marcar/desmarcar">${p.canhoto ? '✓ Canhoto' : 'Canhoto pend.'}</button></span></td>
-        <td class="row-actions"><button class="btn btn-xs" data-act="edit">Editar</button>
-          <select data-more class="more-sel" aria-label="Mais ações"><option value="">Mais ▾</option><option value="dup">Repetir pedido</option><option value="ocorr">Ocorrência (cancelar/devolver/trocar)</option><option value="del">Excluir</option>
-            <optgroup label="Destaque da linha">${U.DESTAQUES.map((d) => `<option value="dest:${d.v}">${d.v === (p.destaque || '') ? '✓ ' : ''}${d.label}</option>`).join('')}</optgroup></select></td>
-      </tr>`;
-    }).join('');
-    tableEl.innerHTML = head + `<tbody>${body || `<tr><td colspan="${8 + prods.length}" class="empty">Nenhum pedido com esses filtros.</td></tr>`}</tbody>`;
-    U.$('#ped-foot', root).textContent = `Mostrando ${U.int(Math.min(limit, rows.length))} de ${U.int(rows.length)} · ordenado do mais recente para o mais antigo (clique nos títulos para mudar)`;
+    bulk();
+    const vis = rows.slice(0, limit);
+    let html = '';
+    if (sort.k === 'data') {
+      const groups = [];
+      for (const p of vis) {
+        const g = groups[groups.length - 1];
+        if (g && g.d === (p.data_pedido || '')) g.rows.push(p); else groups.push({ d: p.data_pedido || '', rows: [p] });
+      }
+      // Totais do dia consideram todos os pedidos filtrados daquele dia
+      const tot = new Map();
+      for (const p of rows) {
+        const k = p.data_pedido || '';
+        const t = tot.get(k) || { n: 0, v: 0, cx: {} };
+        t.n++; t.v += +p.total || 0;
+        for (const pr of prods) t.cx[pr.id] = (t.cx[pr.id] || 0) + D.caixasDe(p, pr.id);
+        tot.set(k, t);
+      }
+      html = groups.map((g) => {
+        const t = tot.get(g.d);
+        return `<div class="day"><div class="day-head"><h3>${U.dayLabel(g.d)}</h3><span class="day-date">${U.date(g.d)}</span>
+          <div class="day-tot"><span><b>${t.n}</b> pedido(s)</span>${prods.map((pr) => t.cx[pr.id] ? `<span>${U.esc(pr.nome)} <b>${U.num(t.cx[pr.id])} cx</b></span>` : '').join('')}<span><b>${U.money(t.v)}</b></span></div></div>
+          ${g.rows.map((p) => rowHtml(p, prods)).join('')}</div>`;
+      }).join('');
+    } else if (vis.length) {
+      html = `<div class="day">${vis.map((p) => rowHtml(p, prods)).join('')}</div>`;
+    }
+    listEl.innerHTML = html || `<div class="day"><div class="empty">${U.icon('search', 28)}Nenhum pedido com esses filtros.</div></div>`;
+    U.$('#ped-foot', root).textContent = rows.length ? `Mostrando ${U.int(vis.length)} de ${U.int(rows.length)}` : '';
     U.$('#ped-mais', root).hidden = rows.length <= limit;
   }
 
@@ -658,8 +745,8 @@
     if (c) selectCliente(c, true);
     calc();
     saveDraft();
-    U.$('#ped-form-card', root).scrollIntoView({ behavior: 'smooth' });
-    U.toast('Pedido copiado para o formulário — confira e salve');
+    U.openDrawer(drawer, '.prod [data-k=caixas]');
+    U.toast('Pedido copiado — confira e salve');
   }
 
   async function excluir(id) {
@@ -814,16 +901,16 @@
       }
       if (visible && (tables.has('pedidos') || tables.has('produtos'))) renderList();
     },
+    novo() { App.ensure('pedidos'); abrirNovo(); },
+    importar() { App.ensure('pedidos'); importarNotas(); },
     novoPara(clienteId) {
-      App.go('pedidos');
-      setTimeout(() => {
-        reset();
-        const c = Store.get('clientes', clienteId);
-        if (c) selectCliente(c);
-        U.$('#ped-form-card', root).scrollIntoView({ behavior: 'smooth' });
-      }, 30);
+      App.ensure('pedidos');
+      reset();
+      U.openDrawer(drawer);
+      const c = Store.get('clientes', clienteId);
+      if (c) selectCliente(c);
     },
-    editar: (id) => { App.go('pedidos'); setTimeout(() => editar(id), 30); },
+    editar(id) { App.ensure('pedidos'); editar(id); },
     revisarNotas,
   };
 })();

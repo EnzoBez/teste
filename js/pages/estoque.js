@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  let root, tab = 'entradas', editEntrada = null, mvLimit = 200;
+  let root, tab = 'extrato', editEntrada = null, mvLimit = 40;
 
   function build(r) {
     root = r;
@@ -10,60 +10,53 @@
     const optProds = prods.map((p) => `<option value="${p.id}">${U.esc(p.nome)}</option>`).join('');
     root.innerHTML = `
       <div class="page-head">
-        <div><div class="eyebrow">Página 3</div><h1>Controle do estoque</h1></div>
-        <div class="head-actions"><button class="btn" id="est-export">Exportar extrato (Excel)</button></div>
+        <div><div class="eyebrow">Depósito Ourosaf</div><h1>Estoque</h1><div class="page-sub">O saldo baixa quando o pedido recebe a nota. Devoluções que voltam entram como retorno.</div></div>
+        <div class="head-actions">
+          <button class="btn" id="est-export">${U.icon('download', 16)} Excel</button>
+          <button class="btn" id="est-inv">${U.icon('clipboard', 16)} Contagem</button>
+          <button class="btn btn-primary" id="est-ent">${U.icon('truck', 16)} Registrar entrada</button>
+        </div>
       </div>
-      <p class="muted small" style="margin-top:-8px">O saldo baixa quando o pedido recebe número de nota. Devoluções e cancelamentos que voltam ao estoque entram como retorno.</p>
       <div class="stock-cards" id="est-cards"></div>
       <div id="est-validade"></div>
-
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-head"><div><div class="eyebrow">Recebimentos</div><h2 id="ent-title">Dar entrada em mercadoria</h2></div></div>
-          <form id="ent-form" autocomplete="off">
-            <div class="fields">
-              <div class="f s4"><label>Data de entrada</label><input type="date" name="data"></div>
-              <div class="f s4"><label>Produto</label><select name="produto_id">${optProds}</select></div>
-              <div class="f s4"><label>Fornecedor</label><input type="text" name="fornecedor" list="dl-fornecedores"></div>
-              <div class="f s4"><label>Caixas <span class="req">*</span></label><input type="number" step="any" min="0" name="caixas" inputmode="decimal"></div>
-              <div class="f s4"><label>Unidades</label><input type="number" step="any" min="0" id="ent-un" inputmode="decimal"></div>
-              <div class="f s4"><label>Nota do fornecedor</label><input type="text" name="nota_fornecedor" inputmode="numeric"></div>
-              <div class="f s4"><label>Lote</label><input type="text" name="lote"></div>
-              <div class="f s4"><label>Validade</label><input type="date" name="validade"></div>
-              <div class="f s4"><label>Custo unitário (R$)</label><input type="text" name="custo_unitario" inputmode="decimal"></div>
-              <div class="f s12"><label>Observação</label><input type="text" name="observacao" placeholder="Ex.: 28 pallets"></div>
-            </div>
-            <div class="actions mt"><button type="button" class="btn" id="ent-limpar">Limpar</button><span class="grow"></span><button class="btn btn-primary" type="submit" id="ent-salvar">Registrar entrada</button></div>
-          </form>
-        </div>
-
-        <div class="card">
-          <div class="card-head"><div><div class="eyebrow">Contagem física</div><h2>Acertar estoque por inventário</h2><div class="sub">Conte as caixas no depósito e digite o total. O sistema calcula a diferença e registra o acerto.</div></div></div>
-          <form id="ac-form" autocomplete="off">
-            <div class="fields">
-              <div class="f s6"><label>Data da contagem</label><input type="date" name="data"></div>
-              <div class="f s6"><label>Produto</label><select name="produto_id">${optProds}</select></div>
-              <div class="f s6"><label>Saldo do sistema (cx)</label><input type="text" id="ac-sistema" readonly></div>
-              <div class="f s6"><label>Contagem física (cx) <span class="req">*</span></label><input type="number" step="any" min="0" name="contado" inputmode="decimal" placeholder="Quantas caixas você contou"></div>
-              <div class="f s12"><label>Motivo da diferença</label><input type="text" name="motivo" placeholder="Ex.: quebra, vencimento, erro de lançamento"></div>
-            </div>
-            <div class="alert alert-info mt" id="ac-diff" hidden></div>
-            <div class="actions mt"><button class="btn btn-primary" type="submit">Registrar acerto</button></div>
-          </form>
-        </div>
-      </div>
-
       <div class="card">
         <div class="tabs" id="est-tabs">
-          <button data-tab="entradas">Entradas registradas</button>
-          <button data-tab="extrato">Extrato de movimentações</button>
-          <button data-tab="acertos">Acertos de inventário</button>
+          <button data-tab="extrato">Movimentações</button>
+          <button data-tab="entradas">Cargas recebidas</button>
+          <button data-tab="acertos">Inventários</button>
           <button data-tab="config">Ponto de partida</button>
         </div>
         <div id="est-tab"></div>
       </div>
-      <datalist id="dl-fornecedores"></datalist>`;
+      <datalist id="dl-fornecedores"></datalist>
+      ${U.drawerHtml('ent-drawer', { title: 'Registrar entrada', sub: 'Carga recebida da fábrica', foot: `<button type="button" class="btn btn-ghost" id="ent-limpar">Limpar</button><span style="flex:1"></span><button class="btn btn-primary btn-lg" type="submit" form="ent-form" id="ent-salvar">Registrar entrada</button>`,
+        body: `<form id="ent-form" autocomplete="off">
+            <div class="fields">
+              <div class="f s3"><label>Data de entrada</label><input type="date" name="data"></div>
+              <div class="f s3"><label>Produto</label><select name="produto_id">${optProds}</select></div>
+              <div class="f s3"><label>Caixas <span class="req">*</span></label><input type="number" step="any" min="0" name="caixas" inputmode="decimal"></div>
+              <div class="f s3"><label>ou unidades</label><input type="number" step="any" min="0" id="ent-un" inputmode="decimal"></div>
+              <div class="f s3"><label>Nota do fornecedor</label><input type="text" name="nota_fornecedor" inputmode="numeric"></div>
+              <div class="f s3"><label>Fornecedor</label><input type="text" name="fornecedor" list="dl-fornecedores"></div>
+              <div class="f s3"><label>Lote</label><input type="text" name="lote"></div>
+              <div class="f s3"><label>Validade</label><input type="date" name="validade"></div>
+              <div class="f s3"><label>Custo unitário (R$)</label><input type="text" name="custo_unitario" inputmode="decimal"></div>
+              <div class="f s3"><label>Observação</label><input type="text" name="observacao" placeholder="Ex.: 28 pallets"></div>
+            </div></form>` })}
+      ${U.drawerHtml('ac-drawer', { title: 'Contagem de inventário', sub: 'Conte as caixas no depósito e digite o total. O sistema calcula a diferença.', foot: `<span style="flex:1"></span><button class="btn btn-primary btn-lg" type="submit" form="ac-form">Registrar acerto</button>`,
+        body: `<form id="ac-form" autocomplete="off">
+            <div class="fields">
+              <div class="f s3"><label>Data da contagem</label><input type="date" name="data"></div>
+              <div class="f s3"><label>Produto</label><select name="produto_id">${optProds}</select></div>
+              <div class="f s3"><label>Saldo do sistema (cx)</label><input type="text" id="ac-sistema" readonly style="display:block"></div>
+              <div class="f s3"><label>Contagem física (cx) <span class="req">*</span></label><input type="number" step="any" min="0" name="contado" inputmode="decimal" placeholder="Quantas caixas"></div>
+              <div class="f s12"><label>Motivo da diferença</label><input type="text" name="motivo" placeholder="Ex.: quebra, vencimento, erro de lançamento"></div>
+            </div>
+            <div class="alert alert-info mt" id="ac-diff" hidden></div></form>` })}`;
 
+    tab = 'extrato';
+    U.$('#est-ent', root).onclick = () => { resetEntrada(); U.openDrawer(U.$('#ent-drawer', root), '[name=caixas]'); };
+    U.$('#est-inv', root).onclick = () => { atualizaAcerto(); U.openDrawer(U.$('#ac-drawer', root), '[name=contado]'); };
     const ef = U.$('#ent-form', root);
     const caixas = ef.querySelector('[name=caixas]');
     const un = U.$('#ent-un', root);
@@ -93,30 +86,71 @@
   }
 
   // ---------- Cartões de saldo ----------
+  /** Série diária do saldo (últimos N dias) a partir do extrato. */
+  function serie(pid, saldoAtual, dias = 60) {
+    const hoje = U.today();
+    const delta = new Map();
+    for (const m of D.movimentos()) {
+      if (m.produto_id !== pid || !m.data) continue;
+      const q = m.acerto != null ? m.acerto : m.campo ? m.qtd : 0;
+      delta.set(m.data, (delta.get(m.data) || 0) + q);
+    }
+    const pts = [];
+    let v = saldoAtual;
+    for (let i = 0; i < dias; i++) {
+      const d = U.addDays(hoje, -i);
+      pts.push(v);
+      v -= delta.get(d) || 0;
+    }
+    return pts.reverse();
+  }
+
+  function spark(pts, color) {
+    const w = 300, h = 64, pad = 4;
+    const min = Math.min(...pts, 0), max = Math.max(...pts, 1);
+    const x = (i) => (i / (pts.length - 1)) * w;
+    const y = (v) => h - pad - ((v - min) / (max - min || 1)) * (h - pad * 2);
+    const line = pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+    const zero = min < 0 ? `<line x1="0" x2="${w}" y1="${y(0)}" y2="${y(0)}" stroke="var(--danger)" stroke-dasharray="3 3" stroke-width="1" opacity=".6"/>` : '';
+    return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Saldo nos últimos ${pts.length} dias">
+      <defs><linearGradient id="g-${color.replace(/\W/g, '')}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+      ${zero}<path d="${line}L${w},${h}L0,${h}Z" fill="url(#g-${color.replace(/\W/g, '')})"/><path d="${line}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+      <circle cx="${x(pts.length - 1)}" cy="${y(pts[pts.length - 1])}" r="3.5" fill="${color}"/></svg>`;
+  }
+
   function renderCards() {
     const est = D.estoque();
     const cfg = D.estoqueConfig();
     const pend = {};
+    const saidas30 = {};
+    const lim = U.addDays(U.today(), -30);
     for (const p of D.pedidos()) {
-      if (p.nota || p.status === 'cancelado') continue;
-      for (const it of p.itens || []) pend[it.produto_id] = (pend[it.produto_id] || 0) + (+it.caixas || 0);
+      if (p.status === 'cancelado') continue;
+      for (const it of p.itens || []) {
+        if (!p.nota) pend[it.produto_id] = (pend[it.produto_id] || 0) + (+it.caixas || 0);
+        else if ((p.data_faturamento || p.data_pedido || '') >= lim) saidas30[it.produto_id] = (saidas30[it.produto_id] || 0) + (+it.caixas || 0);
+      }
     }
-    U.$('#est-cards', root).innerHTML = D.produtos().map((p) => {
+    const cores = ['#53A08E', '#B9A93C'];
+    U.$('#est-cards', root).innerHTML = D.produtos().map((p, i) => {
       const e = est[p.id];
       const proj = e.saldo - (pend[p.id] || 0);
+      const giro = saidas30[p.id] / 30;
+      const cobertura = giro > 0 && e.saldo > 0 ? Math.floor(e.saldo / giro) : null;
       return `<div class="stock">
-        <div class="stock-top"><h3>${U.esc(p.nome)}</h3><small>${cfg.data_base ? 'Desde ' + U.date(cfg.data_base) : 'Sem data-base'}</small></div>
+        <div class="stock-top"><h3>${U.esc(p.nome)}</h3><span class="badge ${e.saldo < 0 ? 'b-danger' : cobertura != null && cobertura < 7 ? 'b-warn' : 'b-ok'}">${e.saldo < 0 ? 'Saldo negativo' : cobertura == null ? 'Sem giro recente' : cobertura < 1 ? 'Acaba em menos de 1 dia' : 'Dura ~' + cobertura + ' dia' + (cobertura > 1 ? 's' : '')}</span></div>
         <div class="stock-big ${e.saldo < 0 ? 'neg' : ''}">${U.num(e.saldo)}<span>caixas</span></div>
-        <div class="stock-units">${U.int(e.saldo * p.unidades_caixa)} unidades · após faturar pedidos pendentes: <b style="color:${proj < 0 ? '#FFB4A9' : '#fff'}">${U.num(proj)} cx</b></div>
+        <div class="stock-units">${U.int(e.saldo * p.unidades_caixa)} un · após faturar pendentes: <b>${U.num(proj)} cx</b></div>
+        ${spark(serie(p.id, e.saldo), cores[i % 2])}
         <div class="stock-grid">
+          <div><small>Entradas</small><b>+${U.num(e.entradas)}</b></div>
+          <div><small>Saídas NF</small><b>−${U.num(e.saidas)}</b></div>
+          <div><small>Retornos</small><b>+${U.num(e.retornos)}</b></div>
           <div><small>Inicial</small><b>${U.num(e.inicial)}</b></div>
-          <div><small>Entradas</small><b>+ ${U.num(e.entradas)}</b></div>
-          <div><small>Saídas NF</small><b>− ${U.num(e.saidas)}</b></div>
-          <div><small>Retornos</small><b>+ ${U.num(e.retornos)}</b></div>
-          <div><small>Reposições</small><b>− ${U.num(e.reposicoes)}</b></div>
-          <div><small>Acertos</small><b>${e.acertos >= 0 ? '+' : '−'} ${U.num(Math.abs(e.acertos))}</b></div>
+          <div><small>Acertos</small><b>${e.acertos >= 0 ? '+' : '−'}${U.num(Math.abs(e.acertos))}</b></div>
+          <div><small>Perdas</small><b>${U.num(e.perdas)}</b></div>
         </div>
-        <div class="stock-units" style="margin:10px 0 0">Perdas registradas (não voltaram): ${U.num(e.perdas)} cx${pend[p.id] ? ` · Pendente de faturar: ${U.num(pend[p.id])} cx` : ''}</div>
+        <div class="stock-units" style="margin:10px 0 0">${cfg.data_base ? 'Desde ' + U.date(cfg.data_base) : 'Sem data-base'} · gráfico: últimos 60 dias${pend[p.id] ? ` · ${U.num(pend[p.id])} cx aguardando nota` : ''}</div>
       </div>`;
     }).join('') || '<div class="alert alert-warn">Nenhum produto cadastrado.</div>';
   }
@@ -145,7 +179,7 @@
     f.querySelector('[name=data]').value = U.today();
     const last = Store.list('entradas').filter((e) => e.empresa_id === D.empresaId()).sort((a, b) => (b.data || '').localeCompare(a.data || ''))[0];
     f.querySelector('[name=fornecedor]').value = last ? last.fornecedor || '' : (D.empresa() || {}).nome || '';
-    U.$('#ent-title', root).textContent = 'Dar entrada em mercadoria';
+    U.$('#ent-drawer-title', root).textContent = 'Registrar entrada';
     U.$('#ent-salvar', root).textContent = 'Registrar entrada';
   }
 
@@ -160,6 +194,7 @@
     Store.save('entradas', o);
     U.toast(editEntrada ? 'Entrada atualizada' : `Entrada de ${U.num(o.caixas)} cx registrada`);
     resetEntrada();
+    U.closeDrawer(U.$('#ent-drawer', root));
   }
 
   function editarEntrada(id) {
@@ -168,9 +203,9 @@
     const f = U.$('#ent-form', root);
     U.fillForm(f, { ...e, custo_unitario: e.custo_unitario != null ? String(e.custo_unitario).replace('.', ',') : '' });
     U.$('#ent-un', root).value = U.round2(e.caixas * ((D.produto(e.produto_id) || {}).unidades_caixa || 1));
-    U.$('#ent-title', root).textContent = 'Editando entrada de ' + U.date(e.data);
+    U.$('#ent-drawer-title', root).textContent = 'Entrada de ' + U.date(e.data);
     U.$('#ent-salvar', root).textContent = 'Salvar alterações';
-    f.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    U.openDrawer(U.$('#ent-drawer', root));
   }
 
   // ---------- Acertos ----------
@@ -203,6 +238,7 @@
     f.querySelector('[name=contado]').value = '';
     f.querySelector('[name=motivo]').value = '';
     atualizaAcerto();
+    U.closeDrawer(U.$('#ac-drawer', root));
   }
 
   // ---------- Abas ----------
@@ -218,25 +254,27 @@
           <td data-l="Nota">${U.esc(e.nota_fornecedor || '—')}<span class="sub">${U.esc(e.fornecedor || '')}</span></td>
           <td data-l="Lote">${U.esc(e.lote || '—')}<span class="sub">${e.validade ? 'Val. ' + U.date(e.validade) : ''}</span></td>
           <td data-l="Custo" class="num">${e.custo_unitario != null ? U.money(e.custo_unitario) : '—'}</td><td data-l="Obs.">${U.esc(e.observacao || '')}</td>
-          <td class="row-actions"><button class="btn btn-xs" data-act="edit-ent">Editar</button> <button class="btn btn-xs btn-ghost-danger" data-act="del-ent">Excluir</button></td></tr>`).join('') ||
+          <td class="row-actions"><button class="icon-btn" data-act="edit-ent" title="Editar">${U.icon('edit', 16)}</button><button class="icon-btn" data-act="del-ent" title="Excluir">${U.icon('trash', 16)}</button></td></tr>`).join('') ||
           '<tr><td colspan="9" class="empty">Nenhuma entrada registrada.</td></tr>'}</tbody></table></div>`;
     } else if (tab === 'extrato') {
       const mv = D.movimentos();
       const filtro = el.dataset.prod || '';
       const rows = mv.filter((m) => !filtro || m.produto_id === filtro);
-      el.innerHTML = `<div class="filters"><div class="f"><label>Produto</label><select id="mv-prod"><option value="">Todos</option>${D.produtos().map((p) => `<option value="${p.id}" ${p.id === filtro ? 'selected' : ''}>${U.esc(p.nome)}</option>`).join('')}</select></div></div>
-        <div class="table-wrap" style="max-height:60vh"><table class="t cards"><thead><tr><th>Data</th><th>Movimento</th><th>Produto</th><th class="num">Caixas</th><th>Referência</th></tr></thead><tbody>
-        ${rows.slice(0, mvLimit).map((m) => `<tr><td data-l="Data">${U.date(m.data)}</td><td data-l="Tipo"><span class="badge ${m.qtd > 0 ? 'b-ok' : m.qtd < 0 ? 'b-mute' : 'b-danger'}">${m.tipo}</span></td><td data-l="Produto">${nome(m.produto_id)}</td>
-          <td data-l="Caixas" class="num ${m.info != null ? 'negv' : m.qtd > 0 ? 'pos' : ''}">${m.info != null ? `(${U.num(m.info)})` : (m.qtd > 0 ? '+' : '') + U.num(m.qtd)}</td><td data-l="Ref.">${U.esc(m.ref || '')}</td></tr>`).join('') ||
-          '<tr><td colspan="5" class="empty">Sem movimentações.</td></tr>'}</tbody></table></div>
+      const ic = { 'Entrada': ['in', 'truck'], 'Saída NF': ['out', 'receipt'], 'Retorno': ['in', 'undo'], 'Perda': ['loss', 'alert'], 'Reposição': ['out', 'copy'], 'Acerto': ['adj', 'clipboard'] };
+      el.innerHTML = `<div class="chips" style="margin-bottom:10px"><button class="chip ${!filtro ? 'on' : ''}" data-mvp="">Todos</button>${D.produtos().map((p) => `<button class="chip ${p.id === filtro ? 'on' : ''}" data-mvp="${p.id}">${U.esc(p.nome)}</button>`).join('')}</div>
+        <div class="timeline" style="max-height:620px;overflow:auto">${rows.slice(0, mvLimit).map((m) => {
+          const [k, i] = ic[m.tipo] || ['out', 'box'];
+          const q = m.info != null ? `<span class="negv">(${U.num(m.info)})</span>` : `<span class="${m.qtd > 0 ? 'pos' : ''}">${m.qtd > 0 ? '+' : ''}${U.num(m.qtd)}</span>`;
+          return `<div class="tl"><span class="tl-ic ${k}">${U.icon(i, 16)}</span><div><b>${m.tipo} · ${nome(m.produto_id)}</b><small>${U.date(m.data)} · ${U.esc(m.ref || '')}</small></div><span class="q">${q} cx</span></div>`;
+        }).join('') || '<div class="empty">Sem movimentações.</div>'}</div>
         ${rows.length > mvLimit ? `<div class="list-foot"><span>Mostrando ${mvLimit} de ${rows.length}</span><button class="btn btn-sm" data-act="mv-mais">Mostrar mais</button></div>` : ''}`;
-      U.$('#mv-prod', el).onchange = (e) => { el.dataset.prod = e.target.value; renderTab(); };
+      U.$$('[data-mvp]', el).forEach((b) => { b.onclick = () => { el.dataset.prod = b.dataset.mvp; renderTab(); }; });
     } else if (tab === 'acertos') {
       const list = Store.list('acertos').filter((a) => a.empresa_id === D.empresaId()).sort((a, b) => (b.data || '').localeCompare(a.data || ''));
       el.innerHTML = `<div class="table-wrap"><table class="t cards"><thead><tr><th>Data</th><th>Produto</th><th class="num">Sistema</th><th class="num">Contado</th><th class="num">Diferença</th><th>Motivo</th><th></th></tr></thead><tbody>
         ${list.map((a) => `<tr data-id="${a.id}"><td data-l="Data">${U.date(a.data)}</td><td data-l="Produto">${nome(a.produto_id)}</td><td data-l="Sistema" class="num">${U.num(a.sistema)}</td><td data-l="Contado" class="num">${U.num(a.contado)}</td>
           <td data-l="Diferença" class="num ${a.diferenca >= 0 ? 'pos' : 'negv'}">${a.diferenca > 0 ? '+' : ''}${U.num(a.diferenca)}</td><td data-l="Motivo">${U.esc(a.motivo || '')}</td>
-          <td class="row-actions"><button class="btn btn-xs btn-ghost-danger" data-act="del-ac">Excluir</button></td></tr>`).join('') ||
+          <td class="row-actions"><button class="icon-btn" data-act="del-ac" title="Excluir">${U.icon('trash', 16)}</button></td></tr>`).join('') ||
           '<tr><td colspan="7" class="empty">Nenhum acerto registrado.</td></tr>'}</tbody></table></div>`;
     } else if (tab === 'config') {
       const cfg = D.estoqueConfig();
@@ -266,7 +304,7 @@
     if (b.dataset.act === 'edit-ent') editarEntrada(id);
     if (b.dataset.act === 'del-ent' && await U.confirm('Excluir esta entrada? O saldo será recalculado.', { ok: 'Excluir', danger: true })) Store.remove('entradas', id);
     if (b.dataset.act === 'del-ac' && await U.confirm('Excluir este acerto? O saldo será recalculado.', { ok: 'Excluir', danger: true })) Store.remove('acertos', id);
-    if (b.dataset.act === 'mv-mais') { mvLimit += 500; renderTab(); }
+    if (b.dataset.act === 'mv-mais') { mvLimit += 200; renderTab(); }
   }
 
   function exportar() {
@@ -294,5 +332,7 @@
     build,
     show: render,
     onData(tables, visible) { if (visible) render(); },
+    entrada() { App.ensure('estoque'); resetEntrada(); U.openDrawer(U.$('#ent-drawer', root), '[name=caixas]'); },
+    inventario() { App.ensure('estoque'); atualizaAcerto(); U.openDrawer(U.$('#ac-drawer', root), '[name=contado]'); },
   };
 })();

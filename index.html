@@ -3,9 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#163C35">
+  <meta name="theme-color" content="#F5F4EC">
   <title>Ourosaf Gestão</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23163C35'/%3E%3Ctext x='32' y='41' font-family='Arial' font-weight='800' font-size='24' fill='%23F7F0BA' text-anchor='middle'%3EOR%3C/text%3E%3C/svg%3E">
+  <script>
+    // Aplica o tema antes de desenhar a página (evita piscar)
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('ourosaf-tema'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2353A08E'/%3E%3Cstop offset='1' stop-color='%23F7F0BA'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='url(%23g)'/%3E%3Ctext x='32' y='41' font-family='Arial' font-weight='800' font-size='22' fill='%2310302A' text-anchor='middle'%3EOR%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -18,53 +30,38 @@
         <div class="progress"><div id="loading-bar"></div></div>
       </div>
       <form id="login-form" hidden>
+        <h2>Bem-vindo de volta</h2>
+        <div class="muted small" style="margin-top:-10px">Entre para acessar seus pedidos.</div>
         <div class="f"><label for="login-email">E-mail</label><input id="login-email" type="email" autocomplete="username" required></div>
         <div class="f"><label for="login-pass">Senha</label><input id="login-pass" type="password" autocomplete="current-password" required></div>
         <div id="login-err" class="alert alert-danger" hidden></div>
-        <button class="btn btn-primary" type="submit">Entrar</button>
+        <button class="btn btn-primary btn-lg" type="submit">Entrar</button>
       </form>
     </div>
   </div>
 
   <!-- Aplicação -->
-  <div id="app" class="app" hidden>
-    <aside class="side">
-      <div class="brand"><div class="brand-logo">OR</div><div><b>OUROSAF</b><small id="side-empresa">Gestão</small></div></div>
-      <div class="empresa-sel" id="empresa-sel-wrap" hidden><select id="empresa-sel" aria-label="Empresa representada"></select></div>
-      <nav class="nav">
-        <a href="#clientes" data-page="clientes"><span class="n">01</span>Clientes</a>
-        <a href="#pedidos" data-page="pedidos"><span class="n">02</span>Pedidos</a>
-        <a href="#estoque" data-page="estoque"><span class="n">03</span>Estoque</a>
-        <a href="#ocorrencias" data-page="ocorrencias"><span class="n">04</span>Ocorrências</a>
-      </nav>
-      <div class="side-stats">
-        <div>Clientes <b id="st-clientes">0</b></div>
-        <div>Pedidos <b id="st-pedidos">0</b></div>
-        <div>Sem nota <b id="st-semnota">0</b></div>
+  <div id="app" hidden>
+    <header class="topbar">
+      <a class="brand" href="#pedidos"><div class="brand-logo">OR</div><div><b>OUROSAF</b><small id="side-empresa">Gestão</small></div></a>
+      <nav class="nav" id="nav"></nav>
+      <div class="top-spacer"></div>
+      <div class="top-actions">
+        <span class="status-pill" title="Situação do salvamento"><span class="dot" id="save-dot"></span><span class="st-txt" id="save-msg">—</span></span>
+        <button class="search-trigger" id="open-palette" type="button"><span id="ic-search"></span><span class="lbl-txt">Buscar ou executar…</span><kbd>Ctrl K</kbd></button>
+        <select class="empresa-sel" id="empresa-sel" aria-label="Empresa representada" hidden></select>
+        <button class="icon-btn bordered" id="btn-theme" type="button" aria-label="Alternar tema claro/escuro"></button>
+        <button class="icon-btn bordered" id="btn-menu" type="button" aria-label="Mais opções"></button>
       </div>
-      <div class="side-actions">
-        <a class="side-btn" href="#ajustes">Ajustes e backup</a>
-        <button class="side-btn" id="btn-sync" type="button">Atualizar dados</button>
-        <button class="side-btn" id="btn-logout" type="button">Sair da conta</button>
-      </div>
-      <div class="side-foot"><span class="dot" id="save-dot"></span><span id="save-msg">—</span></div>
-    </aside>
-    <div class="content">
-      <div class="mobile-top">
-        <div class="brand"><div class="brand-logo">OR</div><div><b>OUROSAF</b></div></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <select id="empresa-sel-m" aria-label="Empresa representada" hidden></select>
-          <a class="side-btn" href="#ajustes" style="padding:5px 9px">⚙</a>
-        </div>
-      </div>
-      <main class="main" id="main">
-        <section id="page-clientes" data-page hidden></section>
-        <section id="page-pedidos" data-page hidden></section>
-        <section id="page-estoque" data-page hidden></section>
-        <section id="page-ocorrencias" data-page hidden></section>
-        <section id="page-ajustes" data-page hidden></section>
-      </main>
-    </div>
+    </header>
+    <main class="main" id="main">
+      <section id="page-clientes" data-page hidden></section>
+      <section id="page-pedidos" data-page hidden></section>
+      <section id="page-estoque" data-page hidden></section>
+      <section id="page-ocorrencias" data-page hidden></section>
+      <section id="page-ajustes" data-page hidden></section>
+    </main>
+    <nav class="tabbar" id="tabbar"></nav>
   </div>
 
   <script src="js/config.js"></script>
@@ -75,6 +72,7 @@
   <script src="js/nfe.js"></script>
   <script src="js/excel.js"></script>
   <script src="js/migracao.js"></script>
+  <script src="js/palette.js"></script>
   <script src="js/pages/clientes.js"></script>
   <script src="js/pages/pedidos.js"></script>
   <script src="js/pages/estoque.js"></script>

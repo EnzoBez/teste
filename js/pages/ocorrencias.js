@@ -11,24 +11,34 @@
     const prods = D.produtos();
     root.innerHTML = `
       <div class="page-head">
-        <div><div class="eyebrow">Página 4</div><h1>Ocorrências</h1></div>
-        <div class="head-actions"><button class="btn" id="oc-export">Exportar Excel</button></div>
+        <div><div class="eyebrow">Pós-venda</div><h1>Ocorrências</h1><div class="page-sub">Cancelamentos, devoluções e trocas ficam registrados e ajustam o estoque sozinhos.</div></div>
+        <div class="head-actions"><button class="btn" id="oc-export">${U.icon('download', 16)} Excel</button><button class="btn btn-primary" id="oc-nova">${U.icon('plus', 16)} Nova ocorrência</button></div>
       </div>
-      <div class="card" id="oc-form-card">
-        <div class="card-head"><div><h2 id="oc-title">Nova ocorrência</h2><div class="sub">Cancelamentos, devoluções e trocas ficam registrados e ajustam o estoque automaticamente</div></div>
-          <button class="btn btn-sm" id="oc-limpar">Limpar</button></div>
-        <form id="oc-form" autocomplete="off">
+      <div class="kpis" id="oc-kpis"></div>
+      <div class="card">
+        <div class="filters">
+          <div class="f wide toolbar" style="margin:0"><label class="lbl" style="display:none">Buscar</label><div class="search" style="max-width:none">${U.icon('search', 16)}<input type="search" data-f="q" placeholder="Cliente, CNPJ, nota, motivo…"></div></div>
+          <div class="f"><label>Tipo</label><select data-f="tipo"><option value="">Todos</option>${Object.entries(U.TIPOS_OCORRENCIA).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+          <div class="f"><label>De</label><input type="date" data-f="de"></div>
+          <div class="f"><label>Até</label><input type="date" data-f="ate"></div>
+          <div class="f"><label>Estoque</label><select data-f="volta"><option value="">Todos</option><option value="1">Voltou ao estoque</option><option value="0">Perda</option></select></div>
+        </div>
+        <div class="summary" id="oc-summary"></div>
+        <div class="table-wrap" style="max-height:70vh"><table class="t cards" id="oc-table"></table></div>
+        <div class="list-foot"><span id="oc-foot"></span><button class="btn btn-sm" id="oc-mais" hidden>Mostrar mais</button></div>
+      </div>
+      ${U.drawerHtml('oc-drawer', { title: 'Nova ocorrência', sub: 'Escolha o pedido e informe o que aconteceu', wide: true, body: `        <form id="oc-form" autocomplete="off">
           <div class="fields">
-            <div class="f s5"><span class="lbl">Tipo</span><div class="seg">${Object.entries(U.TIPOS_OCORRENCIA).map(([k, v]) => `<label><input type="radio" name="tipo" value="${k}" ${k === 'cancelamento' ? 'checked' : ''}><span>${v}</span></label>`).join('')}</div></div>
-            <div class="f s3"><label>Data</label><input type="date" name="data"></div>
-            <div class="f s4"><label>Nota de devolução</label><input type="text" name="nota_devolucao" placeholder="Se houver"></div>
+            <div class="f s12"><span class="lbl">Tipo</span><div class="seg">${Object.entries(U.TIPOS_OCORRENCIA).map(([k, v]) => `<label><input type="radio" name="tipo" value="${k}" ${k === 'cancelamento' ? 'checked' : ''}><span>${v}</span></label>`).join('')}</div></div>
+            <div class="f s6"><label>Data</label><input type="date" name="data"></div>
+            <div class="f s6"><label>Nota de devolução</label><input type="text" name="nota_devolucao" placeholder="Se houver"></div>
             <div class="f s12"><label>Pedido <span class="req">*</span></label>
               <div class="ac"><input type="text" id="oc-ped-q" placeholder="Busque por nota, nº do pedido, cliente ou CNPJ…"><div class="ac-list" id="oc-ped-list" hidden></div></div>
               <div class="client-pill" id="oc-ped-pill" hidden></div>
             </div>
           </div>
           <div id="oc-aviso" class="mt"></div>
-          <div class="prod-grid" id="oc-itens">
+          <div class="section-title">Itens</div><div class="prod-grid" id="oc-itens">
             ${prods.map((p) => `<div class="prod" data-pid="${p.id}">
               <div class="prod-head"><h3>${U.esc(p.nome)}</h3><span class="badge b-info" data-pedido-qtd></span></div>
               <div class="fields">
@@ -43,23 +53,8 @@
             <div class="f s8"><label>Detalhes / observação</label><input type="text" name="observacao"></div>
           </div>
           <div class="alert alert-info mt" id="oc-efeito"></div>
-          <div class="actions mt"><button class="btn btn-sm" type="button" id="oc-cancel-edit" hidden>Cancelar edição</button><span class="grow"></span><button class="btn btn-primary" type="submit" id="oc-salvar">Registrar ocorrência</button></div>
-        </form>
-      </div>
-
-      <div class="card">
-        <div class="card-head"><div><h2>Ocorrências registradas</h2></div></div>
-        <div class="filters">
-          <div class="f wide"><label>Buscar</label><input type="search" data-f="q" placeholder="Cliente, CNPJ, nota, motivo…"></div>
-          <div class="f"><label>Tipo</label><select data-f="tipo"><option value="">Todos</option>${Object.entries(U.TIPOS_OCORRENCIA).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-          <div class="f"><label>De</label><input type="date" data-f="de"></div>
-          <div class="f"><label>Até</label><input type="date" data-f="ate"></div>
-          <div class="f"><label>Estoque</label><select data-f="volta"><option value="">Todos</option><option value="1">Voltou ao estoque</option><option value="0">Perda</option></select></div>
-        </div>
-        <div class="summary" id="oc-summary"></div>
-        <div class="table-wrap" style="max-height:70vh"><table class="t cards" id="oc-table"></table></div>
-        <div class="list-foot"><span id="oc-foot"></span><button class="btn btn-sm" id="oc-mais" hidden>Mostrar mais</button></div>
-      </div>`;
+        </form>`,
+        foot: `<button class="btn btn-ghost" type="button" id="oc-limpar">Limpar</button><span style="flex:1"></span><button class="btn btn-primary btn-lg" type="submit" form="oc-form" id="oc-salvar">Registrar ocorrência</button>` })}`;
 
     form = U.$('#oc-form', root);
     bindPedidoSearch();
@@ -86,7 +81,8 @@
     U.$$('[data-k=repo]', root).forEach((i) => i.addEventListener('input', () => { i.dataset.touched = '1'; }));
     form.onsubmit = (e) => { e.preventDefault(); salvar(); };
     U.$('#oc-limpar', root).onclick = reset;
-    U.$('#oc-cancel-edit', root).onclick = reset;
+    U.$('#oc-nova', root).onclick = () => { reset(); U.openDrawer(U.$('#oc-drawer', root), '#oc-ped-q'); };
+    U.$('#oc-kpis', root).onclick = (e) => { const b = e.target.closest('[data-tipo]'); if (b) { U.$('[data-f=tipo]', root).value = b.dataset.tipo; renderList(); } };
     U.$$('[data-f]', root).forEach((el) => el.addEventListener('input', U.debounce(() => { limit = 100; renderList(); }, 150)));
     U.$('#oc-mais', root).onclick = () => { limit += 300; renderList(); };
     U.$('#oc-table', root).addEventListener('click', onListClick);
@@ -232,9 +228,8 @@
     U.$$('[data-k=repo]', root).forEach((i) => { delete i.dataset.touched; });
     setPedido(null);
     ajustaTipo(false);
-    U.$('#oc-title', root).textContent = 'Nova ocorrência';
+    U.$('#oc-drawer-title', root).textContent = 'Nova ocorrência';
     U.$('#oc-salvar', root).textContent = 'Registrar ocorrência';
-    U.$('#oc-cancel-edit', root).hidden = true;
     efeito();
   }
 
@@ -260,6 +255,7 @@
     if (old && old.tipo !== 'troca' && (f.tipo !== old.tipo || old.pedido_id !== pedido.id)) reativarSeSemCancelamento(old.pedido_id, o.id);
     U.toast(`${U.TIPOS_OCORRENCIA[f.tipo]} registrado(a)`);
     reset();
+    U.closeDrawer(U.$('#oc-drawer', root));
   }
 
   /** Volta o pedido para "ativo" quando não resta ocorrência que justifique cancelado/devolvido. */
@@ -294,11 +290,10 @@
       card.querySelector('[data-k=repo]').value = r ? r.caixas : '';
       if (r) card.querySelector('[data-k=repo]').dataset.touched = '1';
     });
-    U.$('#oc-title', root).textContent = `Editando ocorrência nº ${o.numero}`;
+    U.$('#oc-drawer-title', root).textContent = `Ocorrência nº ${o.numero}`;
     U.$('#oc-salvar', root).textContent = 'Salvar alterações';
-    U.$('#oc-cancel-edit', root).hidden = false;
     efeito();
-    U.$('#oc-form-card', root).scrollIntoView({ behavior: 'smooth' });
+    U.openDrawer(U.$('#oc-drawer', root));
   }
 
   async function excluir(id) {
@@ -342,6 +337,15 @@
     const rows = filtered();
     const nome = (id) => U.esc((D.produto(id) || {}).nome || '');
     const cnt = (t) => rows.filter((o) => o.tipo === t).length;
+    const todas = Store.list('ocorrencias').filter((o) => o.empresa_id === D.empresaId());
+    const mes = U.today().slice(0, 8);
+    const ct = (t) => todas.filter((o) => o.tipo === t).length;
+    const perdaMes = todas.filter((o) => (o.data || '').startsWith(mes)).reduce((s2, o) => s2 + (o.itens || []).filter((i) => !i.volta_estoque && o.tipo !== 'cancelamento').reduce((a2, i) => a2 + (+i.caixas || 0), 0), 0);
+    U.$('#oc-kpis', root).innerHTML = `
+      <button class="kpi" data-tipo=""><small>Total registrado</small><b>${todas.length}</b><span>${todas.filter((o) => (o.data || '').startsWith(mes)).length} neste mês</span></button>
+      <button class="kpi" data-tipo="cancelamento"><small>Cancelamentos</small><b>${ct('cancelamento')}</b><span>pedidos cancelados</span></button>
+      <button class="kpi" data-tipo="devolucao"><small>Devoluções</small><b>${ct('devolucao')}</b><span>${ct('troca')} troca(s)</span></button>
+      <div class="kpi ${perdaMes ? 'alert' : ''}"><small>Perdas no mês</small><b>${U.num(perdaMes)} cx</b><span>não voltaram ao estoque</span></div>`;
     U.$('#oc-summary', root).innerHTML = `<span>Total: <b>${rows.length}</b></span>` + Object.entries(U.TIPOS_OCORRENCIA).map(([k, v]) => `<span>${v}: <b>${cnt(k)}</b></span>`).join('');
     const badge = { cancelamento: 'b-danger', devolucao: 'b-warn', troca: 'b-info' };
     U.$('#oc-table', root).innerHTML = `<thead><tr><th>Nº</th><th>Data</th><th>Tipo</th><th>Cliente</th><th>Pedido / nota</th><th>Itens</th><th>Reposição</th><th>Motivo</th><th></th></tr></thead><tbody>` +
@@ -355,7 +359,7 @@
           <td data-l="Itens">${(o.itens || []).map((i) => `${D.qtd(i.caixas, i.produto_id)} ${nome(i.produto_id)} <span class="badge ${i.volta_estoque ? 'b-ok' : 'b-danger'}">${i.volta_estoque ? (o.tipo === 'cancelamento' ? 'não saiu' : 'voltou') : 'perda'}</span>`).join('<br>') || '<span class="muted">—</span>'}</td>
           <td data-l="Reposição">${(o.reposicao || []).map((i) => `${U.num(i.caixas)} cx ${nome(i.produto_id)}`).join('<br>') || '<span class="muted">—</span>'}</td>
           <td data-l="Motivo">${U.esc(o.motivo || '')}<span class="sub">${U.esc(o.observacao || '')}</span></td>
-          <td class="row-actions">${p ? '<button class="btn btn-xs" data-act="ped">Pedido</button> ' : ''}<button class="btn btn-xs" data-act="edit">Editar</button> <button class="btn btn-xs btn-ghost-danger" data-act="del">Excluir</button></td>
+          <td class="row-actions">${p ? `<button class="icon-btn" data-act="ped" title="Abrir pedido">${U.icon('receipt', 16)}</button>` : ''}<button class="icon-btn" data-act="edit" title="Editar">${U.icon('edit', 16)}</button><button class="icon-btn" data-act="del" title="Excluir">${U.icon('trash', 16)}</button></td>
         </tr>`;
       }).join('') || '<tr><td colspan="9" class="empty">Nenhuma ocorrência registrada.</td></tr>') + '</tbody>';
     U.$('#oc-foot', root).textContent = `Mostrando ${Math.min(limit, rows.length)} de ${rows.length}`;
@@ -378,18 +382,17 @@
     build,
     show: renderList,
     onData(tables, visible) { if (visible && (tables.has('ocorrencias') || tables.has('pedidos'))) renderList(); },
+    nova() { App.ensure('ocorrencias'); reset(); U.openDrawer(U.$('#oc-drawer', root), '#oc-ped-q'); },
     novaPara(pedidoId) {
-      App.go('ocorrencias');
-      setTimeout(() => {
-        reset();
-        const p = Store.get('pedidos', pedidoId);
-        if (!p) return;
-        const tipo = p.nota ? 'devolucao' : 'cancelamento';
-        form.querySelector(`[name=tipo][value=${tipo}]`).checked = true;
-        ajustaTipo(false);
-        setPedido(p);
-        U.$('#oc-form-card', root).scrollIntoView({ behavior: 'smooth' });
-      }, 30);
+      App.ensure('ocorrencias');
+      reset();
+      const p = Store.get('pedidos', pedidoId);
+      if (!p) return;
+      const tipo = p.nota ? 'devolucao' : 'cancelamento';
+      form.querySelector(`[name=tipo][value=${tipo}]`).checked = true;
+      ajustaTipo(false);
+      setPedido(p);
+      U.openDrawer(U.$('#oc-drawer', root));
     },
   };
 })();

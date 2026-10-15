@@ -111,33 +111,35 @@
     root = r;
     root.innerHTML = `
       <div class="page-head">
-        <div><div class="eyebrow">Página 1</div><h1>Clientes</h1></div>
-        <div class="head-actions"><button class="btn" id="cli-export">Exportar Excel</button><button class="btn btn-primary" id="cli-novo">+ Novo cliente</button></div>
+        <div><div class="eyebrow">Carteira</div><h1>Clientes</h1><div class="page-sub" id="cli-count"></div></div>
+        <div class="head-actions">
+          <button class="btn" id="cli-export">${U.icon('download', 16)} Excel</button>
+          <button class="btn btn-primary" id="cli-novo">${U.icon('plus', 16)} Novo cliente</button>
+        </div>
       </div>
-      <div class="grid-cl">
-        <div class="card" id="cli-form-card">
-          <div class="card-head"><div><h2 id="cli-form-title">Novo cliente</h2><div class="sub">Campos com * são obrigatórios</div></div></div>
-          <form id="cli-form" autocomplete="off">${formHtml()}
-            <div class="actions mt">
-              <button type="button" class="btn" id="cli-limpar">Limpar</button>
-              <span class="grow"></span>
-              <button type="button" class="btn" id="cli-salvar-pedido">Salvar e fazer pedido</button>
-              <button type="submit" class="btn btn-primary">Salvar cliente</button>
-            </div>
-          </form>
+      <div class="kpis" id="cli-kpis"></div>
+      <div class="toolbar">
+        <div class="search">${U.icon('search', 16)}<input type="search" id="cli-q" placeholder="Nome, CNPJ, cidade, bairro, e-mail…  ( / )"></div>
+        <div class="chips" id="cli-chips">
+          ${[['', 'Todos'], ['ativos', 'Compraram (90 dias)'], ['inativos', 'Inativos'], ['nunca', 'Nunca compraram'], ['dup', 'CNPJ duplicado']]
+            .map(([k, v]) => `<button class="chip ${k === '' ? 'on' : ''}" data-sit="${k}">${v}</button>`).join('')}
         </div>
-        <div class="card">
-          <div class="card-head"><div><h2>Clientes cadastrados</h2><div class="sub" id="cli-count"></div></div></div>
-          <div class="filters">
-            <div class="f wide"><label>Buscar</label><input type="search" id="cli-q" placeholder="Nome, CNPJ, cidade, bairro, e-mail…"></div>
-            <div class="f"><label>Vendedor</label><select id="cli-vend"><option value="">Todos</option></select></div>
-            <div class="f"><label>Cidade</label><select id="cli-cid"><option value="">Todas</option></select></div>
-            <div class="f"><label>Situação</label><select id="cli-sit"><option value="">Todos</option><option value="ativos">Compraram nos últimos 90 dias</option><option value="inativos">Sem compra há 90+ dias</option><option value="nunca">Nunca compraram</option><option value="dup">CNPJ duplicado</option></select></div>
-          </div>
-          <div class="table-wrap" style="max-height:70vh"><table class="t cards" id="cli-table"></table></div>
-          <div class="list-foot"><span id="cli-foot"></span><button class="btn btn-sm" id="cli-mais" hidden>Mostrar mais</button></div>
-        </div>
-      </div>`;
+        <span class="grow"></span>
+        <select id="cli-vend" class="btn" style="width:auto;min-height:36px;max-width:220px" aria-label="Vendedor"><option value="">Todos os vendedores</option></select>
+        <select id="cli-cid" class="btn" style="width:auto;min-height:36px;max-width:200px" aria-label="Cidade"><option value="">Todas as cidades</option></select>
+      </div>
+      <div class="table-wrap"><table class="t cards" id="cli-table"></table></div>
+      <div class="list-foot"><span id="cli-foot"></span><button class="btn btn-sm" id="cli-mais" hidden>Mostrar mais</button></div>
+      ${U.drawerHtml('cli-drawer', {
+        title: 'Novo cliente', sub: 'Digite o CNPJ: os dados da Receita são preenchidos sozinhos', wide: true,
+        body: `<form id="cli-form" autocomplete="off">${formHtml()}</form>`,
+        foot: `<span style="flex:1"></span><button type="button" class="btn btn-ghost" id="cli-salvar-pedido">Salvar e fazer pedido</button>
+          <button type="submit" form="cli-form" class="btn btn-primary btn-lg">Salvar cliente</button>`,
+      })}
+      ${U.drawerHtml('cli-detail', { title: '', body: '<div id="cli-detail-body"></div>', wide: true,
+        foot: `<button type="button" class="btn btn-ghost btn-ghost-danger" id="cli-d-del">${U.icon('trash', 16)} Excluir</button><span style="flex:1"></span>
+          <button type="button" class="btn" id="cli-d-edit">${U.icon('edit', 16)} Editar cadastro</button>
+          <button type="button" class="btn btn-primary" id="cli-d-ped">${U.icon('plus', 16)} Novo pedido</button>` })}`;
 
     form = U.$('#cli-form', root);
     listEl = U.$('#cli-table', root);
@@ -147,41 +149,72 @@
     form.onsubmit = (e) => {
       e.preventDefault();
       const c = saveFrom(form, editingId);
-      if (c) { U.toast(editingId ? 'Cliente atualizado' : 'Cliente cadastrado'); novo(); }
+      if (c) { U.toast(editingId ? 'Cliente atualizado' : 'Cliente cadastrado'); novo(); U.closeDrawer(U.$('#cli-drawer', root)); }
     };
     U.$('#cli-salvar-pedido', root).onclick = () => {
       const c = saveFrom(form, editingId);
-      if (c) { novo(); Pages.pedidos.novoPara(c.id); }
+      if (c) { novo(); U.closeDrawer(U.$('#cli-drawer', root)); Pages.pedidos.novoPara(c.id); }
     };
-    U.$('#cli-limpar', root).onclick = novo;
-    U.$('#cli-novo', root).onclick = () => { novo(); form.querySelector('[name=cnpj]').focus(); };
+    U.$('#cli-novo', root).onclick = abrirNovo;
     U.$('#cli-export', root).onclick = () => Excel.clientes(filtered());
 
     const reList = () => { limit = PAGE; renderList(); };
     U.$('#cli-q', root).addEventListener('input', U.debounce(reList, 150));
-    ['#cli-vend', '#cli-cid', '#cli-sit'].forEach((s) => { U.$(s, root).onchange = reList; });
+    ['#cli-vend', '#cli-cid'].forEach((s) => { U.$(s, root).onchange = reList; });
+    U.$('#cli-chips', root).onclick = (e) => {
+      const b = e.target.closest('[data-sit]');
+      if (!b) return;
+      sit = b.dataset.sit;
+      U.$$('#cli-chips .chip', root).forEach((c) => c.classList.toggle('on', c === b));
+      reList();
+    };
+    U.$('#cli-kpis', root).onclick = (e) => { const b = e.target.closest('[data-sit]'); if (b) U.$(`#cli-chips [data-sit="${b.dataset.sit}"]`, root).click(); };
     U.$('#cli-mais', root).onclick = () => { limit += PAGE * 3; renderList(); };
 
-    listEl.addEventListener('click', (e) => {
+    listEl.addEventListener('click', async (e) => {
       const th = e.target.closest('th[data-k]');
-      if (th) { sort = { k: th.dataset.k, dir: sort.k === th.dataset.k ? -sort.dir : 1 }; renderList(); return; }
+      if (th) { sort = { k: th.dataset.k, dir: sort.k === th.dataset.k ? -sort.dir : (th.dataset.k === 'ultimo' ? -1 : 1) }; renderList(); return; }
+      const tr = e.target.closest('tr[data-id]');
+      if (!tr) return;
+      const id = tr.dataset.id;
       const b = e.target.closest('[data-act]');
-      if (!b) return;
-      const id = b.closest('tr').dataset.id;
-      if (b.dataset.act === 'edit') editar(id);
+      if (!b) { abrir(id); return; }
       if (b.dataset.act === 'pedido') Pages.pedidos.novoPara(id);
-      if (b.dataset.act === 'hist') historico(id);
-      if (b.dataset.act === 'del') excluir(id);
+      if (b.dataset.act === 'more') {
+        const v = await U.menu(b, [
+          { label: 'Ver ficha e histórico', value: 'hist', icon: 'history' },
+          { label: 'Novo pedido', value: 'pedido', icon: 'plus' },
+          { label: 'Editar cadastro', value: 'edit', icon: 'edit' },
+          '-',
+          { label: 'Excluir cliente', value: 'del', icon: 'trash', danger: true },
+        ]);
+        if (v === 'hist') abrir(id);
+        if (v === 'pedido') Pages.pedidos.novoPara(id);
+        if (v === 'edit') editar(id);
+        if (v === 'del') excluir(id);
+      }
     });
+    U.$('#cli-d-ped', root).onclick = () => { const id = detailId; U.closeDrawer(U.$('#cli-detail', root)); Pages.pedidos.novoPara(id); };
+    U.$('#cli-d-edit', root).onclick = () => { const id = detailId; U.closeDrawer(U.$('#cli-detail', root)); editar(id); };
+    U.$('#cli-d-del', root).onclick = () => excluir(detailId);
     binder.checkDup();
     fillFilters();
     renderList();
   }
 
+  let sit = '';
+  let detailId = null;
+
+  function abrirNovo() {
+    novo();
+    U.openDrawer(U.$('#cli-drawer', root), '[name=cnpj]');
+  }
+
   function novo() {
     editingId = null;
     form.reset();
-    U.$('#cli-form-title', root).textContent = 'Novo cliente';
+    U.$('#cli-drawer-title', root).textContent = 'Novo cliente';
+    U.$('#cli-drawer-sub', root).textContent = 'Digite o CNPJ: os dados da Receita são preenchidos sozinhos';
     form.querySelector('[data-dup]').hidden = true;
   }
 
@@ -190,10 +223,10 @@
     if (!c) return;
     editingId = id;
     U.fillForm(form, c);
-    U.$('#cli-form-title', root).textContent = 'Editando: ' + c.razao_social;
+    U.$('#cli-drawer-title', root).textContent = c.razao_social;
+    U.$('#cli-drawer-sub', root).textContent = 'Editando cadastro · ' + U.fmtDoc(c.cnpj);
     form.querySelector('[data-dup]').hidden = true;
-    U.$('#cli-form-card', root).scrollIntoView({ behavior: 'smooth', block: 'start' });
-    form.querySelector('[name=razao_social]').focus();
+    U.openDrawer(U.$('#cli-drawer', root), '[name=razao_social]');
   }
 
   async function excluir(id) {
@@ -203,27 +236,53 @@
     if (!ok) return;
     Store.remove('clientes', id);
     if (editingId === id) novo();
+    if (detailId === id) U.closeDrawer(U.$('#cli-detail', root));
     U.toast('Cliente excluído');
   }
 
-  function historico(id) {
+  /** Ficha do cliente: dados, indicadores e histórico de pedidos. */
+  function abrir(id) {
     const c = Store.get('clientes', id);
+    if (!c) return;
+    detailId = id;
     const d = U.digits(c.cnpj);
     const peds = Store.list('pedidos').filter((p) => U.digits(p.cnpj) === d).sort((a, b) => (b.data_pedido || '').localeCompare(a.data_pedido || ''));
     const prods = Store.list('produtos');
-    const total = peds.filter((p) => p.status !== 'cancelado' && p.tipo === 'venda').reduce((s, p) => s + (+p.total || 0), 0);
-    const rows = peds.slice(0, 60).map((p) => `<tr><td>${U.date(p.data_pedido)}</td><td>${U.esc(p.nota || '—')}</td><td>${U.TIPOS_PEDIDO[p.tipo] || ''}</td>
-      <td>${(p.itens || []).filter((i) => +i.caixas).map((i) => { const pr = prods.find((x) => x.id === i.produto_id); return `${U.num(i.caixas)} cx ${U.esc(pr ? pr.nome : '')} (${U.money(i.valor_unitario)}/un)`; }).join('<br>')}</td>
-      <td class="num">${U.money(p.total)}</td><td>${p.status === 'cancelado' ? '<span class="badge b-danger">Cancelado</span>' : ''}</td></tr>`).join('');
-    U.modal({
-      title: c.razao_social, wide: true,
-      body: `<p class="muted">${U.esc(U.fmtDoc(c.cnpj))} · ${U.esc(c.cidade || '')}/${U.esc(c.uf || '')} · ${U.esc(c.vendedor || 'sem vendedor')}</p>
-        <div class="summary"><span>Pedidos: <b>${peds.length}</b></span><span>Total vendido: <b>${U.money(total)}</b></span>
-        <span>Último pedido: <b>${peds[0] ? U.date(peds[0].data_pedido) : '—'}</b></span></div>
-        <div class="table-wrap"><table class="t"><thead><tr><th>Data</th><th>Nota</th><th>Tipo</th><th>Itens</th><th class="num">Total</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6" class="empty">Nenhum pedido.</td></tr>'}</tbody></table></div>`,
-      buttons: [{ label: 'Fechar', value: null }, { label: 'Novo pedido', cls: 'btn-primary', value: 'pedido' }],
-    }).then((v) => { if (v === 'pedido') Pages.pedidos.novoPara(id); });
+    const vendas = peds.filter((p) => p.status !== 'cancelado' && p.tipo === 'venda');
+    const total = vendas.reduce((s, p) => s + (+p.total || 0), 0);
+    const ticket = vendas.length ? total / vendas.length : 0;
+    // Intervalo médio entre pedidos
+    const datas = vendas.map((p) => p.data_pedido).filter(Boolean).sort();
+    let intervalo = null;
+    if (datas.length > 1) intervalo = Math.round(U.daysBetween(datas[0], datas[datas.length - 1]) / (datas.length - 1));
+    const ultimo = peds[0];
+    const dias = ultimo && ultimo.data_pedido ? U.daysBetween(ultimo.data_pedido, U.today()) : null;
+    const precos = D.produtos().map((p) => { const v = D.ultimoPreco(c.cnpj, p.id); return v != null ? `${U.esc(p.nome)} <b>${U.money(v)}</b>/un` : ''; }).filter(Boolean).join(' · ');
+    U.$('#cli-detail-title', root).innerHTML = `<span style="display:flex;align-items:center;gap:12px"><span class="avatar" style="--h:${U.hue(c.razao_social)};width:44px;height:44px;font-size:15px">${U.esc(U.initials(c.razao_social))}</span><span>${U.esc(c.razao_social)}</span></span>`;
+    U.$('#cli-detail-sub', root).textContent = [U.fmtDoc(c.cnpj), c.ie && 'IE ' + c.ie].filter(Boolean).join(' · ');
+    const rows = peds.slice(0, 80).map((p) => `<tr><td>${U.date(p.data_pedido)}</td><td>${p.nota ? 'NF ' + U.esc(p.nota) : '<span class="badge b-warn">Sem nota</span>'}</td>
+      <td>${(p.itens || []).filter((i) => +i.caixas).map((i) => { const pr = prods.find((x) => x.id === i.produto_id); return `${U.num(i.caixas)} cx ${U.esc(pr ? pr.nome : '')} <span class="muted">· ${U.money(i.valor_unitario)}/un</span>`; }).join('<br>')}</td>
+      <td>${U.esc(p.vendedor || '')}</td><td class="num"><b>${U.money(p.total)}</b></td>
+      <td>${p.status === 'cancelado' ? '<span class="badge b-danger">Cancelado</span>' : p.status === 'devolvido' ? '<span class="badge b-warn">Devolvido</span>' : p.tipo === 'bonificacao' ? '<span class="badge b-warn">Bonif.</span>' : ''}</td></tr>`).join('');
+    U.$('#cli-detail-body', root).innerHTML = `
+      <div class="kpis">
+        <div class="kpi"><small>Total comprado</small><b>${U.money(total)}</b><span>${vendas.length} pedido(s) de venda</span></div>
+        <div class="kpi"><small>Ticket médio</small><b>${U.money(ticket)}</b><span>por pedido</span></div>
+        <div class="kpi ${dias != null && intervalo && dias > intervalo * 1.5 ? 'warn' : ''}"><small>Último pedido</small><b>${dias == null ? '—' : dias === 0 ? 'Hoje' : dias + ' dias'}</b><span>${intervalo ? 'compra a cada ~' + intervalo + ' dias' : 'sem frequência ainda'}</span></div>
+      </div>
+      <div class="fields" style="margin-bottom:6px">
+        <div class="f s4"><span class="lbl">Vendedor</span><span>${U.esc(c.vendedor || '—')}</span></div>
+        <div class="f s4"><span class="lbl">Cidade</span><span>${U.esc([c.cidade, c.uf].filter(Boolean).join('/') || '—')}</span></div>
+        <div class="f s4"><span class="lbl">Bairro</span><span>${U.esc(c.bairro || '—')}</span></div>
+        <div class="f s8"><span class="lbl">Endereço</span><span>${U.esc([c.endereco, c.numero, c.complemento].filter(Boolean).join(', ') || '—')}</span></div>
+        <div class="f s4"><span class="lbl">Telefone</span><span>${U.esc(c.telefone || '—')}</span></div>
+        <div class="f s8"><span class="lbl">E-mail</span><span>${U.esc(c.email || '—')}</span></div>
+        <div class="f s4"><span class="lbl">Último preço</span><span>${precos || '—'}</span></div>
+      </div>
+      <div class="section-title">Histórico de pedidos (${peds.length})</div>
+      <div class="table-wrap"><table class="t"><thead><tr><th>Data</th><th>Nota</th><th>Itens</th><th>Vendedor</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" class="empty">Nenhum pedido ainda.</td></tr>'}</tbody></table></div>`;
+    U.openDrawer(U.$('#cli-detail', root));
   }
 
   function fillFilters() {
@@ -234,8 +293,8 @@
       const v = el.value;
       el.innerHTML = `<option value="">${first}</option>` + opts.map((o) => `<option ${o === v ? 'selected' : ''}>${U.esc(o)}</option>`).join('');
     };
-    keep('#cli-vend', uniq('vendedor'), 'Todos');
-    keep('#cli-cid', uniq('cidade'), 'Todas');
+    keep('#cli-vend', uniq('vendedor'), 'Todos os vendedores');
+    keep('#cli-cid', uniq('cidade'), 'Todas as cidades');
   }
 
   function pedidoStats() {
@@ -243,8 +302,9 @@
     for (const p of Store.list('pedidos')) {
       if (p.status === 'cancelado') continue;
       const k = U.digits(p.cnpj);
-      const s = m.get(k) || { n: 0, ultimo: '' };
+      const s = m.get(k) || { n: 0, ultimo: '', total: 0 };
       s.n++;
+      s.total += p.tipo === 'venda' ? +p.total || 0 : 0;
       if ((p.data_pedido || '') > s.ultimo) s.ultimo = p.data_pedido;
       m.set(k, s);
     }
@@ -257,11 +317,10 @@
     const qd = U.digits(q);
     const vend = U.$('#cli-vend', root).value;
     const cid = U.$('#cli-cid', root).value;
-    const sit = U.$('#cli-sit', root).value;
     statsCache = pedidoStats();
     const limite = U.addDays(U.today(), -90);
     const dupCount = new Map();
-    if (sit === 'dup') for (const c of Store.list('clientes')) { const k = U.digits(c.cnpj); dupCount.set(k, (dupCount.get(k) || 0) + 1); }
+    for (const c of Store.list('clientes')) { const k = U.digits(c.cnpj); dupCount.set(k, (dupCount.get(k) || 0) + 1); }
     let rows = Store.list('clientes').filter((c) => {
       if (vend && (c.vendedor || '').trim() !== vend) return false;
       if (cid && (c.cidade || '').trim() !== cid) return false;
@@ -280,35 +339,52 @@
     rows = rows.slice().sort((a, b) => {
       let va, vb;
       if (k === 'ultimo') { va = (statsCache.get(U.digits(a.cnpj)) || {}).ultimo || ''; vb = (statsCache.get(U.digits(b.cnpj)) || {}).ultimo || ''; }
+      else if (k === 'total') { va = (statsCache.get(U.digits(a.cnpj)) || {}).total || 0; vb = (statsCache.get(U.digits(b.cnpj)) || {}).total || 0; }
       else { va = U.norm(a[k]); vb = U.norm(b[k]); }
       return va < vb ? -sort.dir : va > vb ? sort.dir : 0;
     });
+    // contadores para KPIs
+    const all = Store.list('clientes');
+    let ativos = 0, inativos = 0, nunca = 0;
+    for (const c of all) {
+      const s = statsCache.get(U.digits(c.cnpj));
+      if (!s) nunca++; else if (s.ultimo >= limite) ativos++; else inativos++;
+    }
+    kpiData = { total: all.length, ativos, inativos, nunca, dup: Array.from(dupCount.values()).filter((n) => n > 1).length };
     return rows;
   }
+  let kpiData = null;
 
   function renderList() {
     const rows = filtered();
-    const total = Store.list('clientes').length;
-    U.$('#cli-count', root).textContent = `${U.int(total)} clientes no cadastro`;
-    const arrow = (k) => (sort.k === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : '');
+    const k = kpiData;
+    U.$('#cli-count', root).textContent = `${U.int(k.total)} clientes cadastrados`;
+    U.$('#cli-kpis', root).innerHTML = `
+      <button class="kpi hero" data-sit="ativos"><small>Ativos</small><b>${U.int(k.ativos)}</b><span>compraram nos últimos 90 dias</span></button>
+      <button class="kpi ${k.inativos ? 'warn' : ''}" data-sit="inativos"><small>Inativos</small><b>${U.int(k.inativos)}</b><span>sem compra há 90+ dias — oportunidade</span></button>
+      <button class="kpi" data-sit="nunca"><small>Nunca compraram</small><b>${U.int(k.nunca)}</b><span>cadastrados sem pedido</span></button>
+      <button class="kpi" data-sit="dup"><small>CNPJ duplicado</small><b>${U.int(k.dup)}</b><span>CNPJs com mais de um cadastro</span></button>`;
+    const arrow = (key) => (sort.k === key ? (sort.dir > 0 ? ' ↑' : ' ↓') : '');
     const head = `<thead><tr>
-      <th class="sortable" data-k="cnpj">CNPJ${arrow('cnpj')}</th><th class="sortable" data-k="razao_social">Razão social${arrow('razao_social')}</th>
-      <th class="sortable" data-k="cidade">Cidade/UF${arrow('cidade')}</th><th class="sortable" data-k="vendedor">Vendedor${arrow('vendedor')}</th>
-      <th>Contato</th><th class="sortable" data-k="ultimo">Último pedido${arrow('ultimo')}</th><th></th></tr></thead>`;
+      <th class="sortable" data-k="razao_social">Cliente${arrow('razao_social')}</th>
+      <th class="sortable" data-k="cidade">Cidade${arrow('cidade')}</th><th class="sortable" data-k="vendedor">Vendedor${arrow('vendedor')}</th>
+      <th>Contato</th><th class="sortable num" data-k="total">Comprado${arrow('total')}</th><th class="sortable" data-k="ultimo">Último pedido${arrow('ultimo')}</th><th></th></tr></thead>`;
+    const hoje = U.today();
     const body = rows.slice(0, limit).map((c) => {
       const s = statsCache.get(U.digits(c.cnpj));
-      return `<tr data-id="${c.id}">
-        <td data-l="CNPJ" class="num" style="text-align:left">${U.esc(U.fmtDoc(c.cnpj))}</td>
-        <td data-l="Cliente"><b>${U.esc(c.razao_social)}</b><span class="sub">${U.esc(c.nome_fantasia && c.nome_fantasia !== c.razao_social ? c.nome_fantasia : (c.produto || ''))}</span></td>
+      const dias = s && s.ultimo ? U.daysBetween(s.ultimo, hoje) : null;
+      return `<tr data-id="${c.id}" class="clickable">
+        <td data-l="Cliente"><div class="cell-client"><span class="avatar" style="--h:${U.hue(c.razao_social)}">${U.esc(U.initials(c.razao_social))}</span>
+          <div style="min-width:0"><b>${U.esc(c.razao_social)}</b><span class="sub">${U.esc(U.fmtDoc(c.cnpj))}${c.nome_fantasia && c.nome_fantasia !== c.razao_social ? ' · ' + U.esc(c.nome_fantasia) : ''}</span></div></div></td>
         <td data-l="Cidade">${U.esc(c.cidade || '')}${c.uf ? '/' + U.esc(c.uf) : ''}<span class="sub">${U.esc(c.bairro || '')}</span></td>
         <td data-l="Vendedor">${U.esc(c.vendedor || '—')}</td>
         <td data-l="Contato">${U.esc(c.email || '')}<span class="sub">${U.esc(c.telefone || '')}</span></td>
-        <td data-l="Último">${s ? U.date(s.ultimo) + `<span class="sub">${s.n} pedido(s)</span>` : '<span class="muted">—</span>'}</td>
-        <td class="row-actions"><button class="btn btn-xs" data-act="pedido">Pedido</button> <button class="btn btn-xs" data-act="hist">Histórico</button>
-          <button class="btn btn-xs" data-act="edit">Editar</button> <button class="btn btn-xs btn-ghost-danger" data-act="del">Excluir</button></td>
+        <td data-l="Comprado" class="num">${s && s.total ? U.money(s.total) : '<span class="muted">—</span>'}<span class="sub">${s ? s.n + ' pedido(s)' : ''}</span></td>
+        <td data-l="Último">${s ? `${U.date(s.ultimo)}<span class="sub">${dias === 0 ? 'hoje' : dias + ' dias atrás'}</span>` : '<span class="badge b-mute">Nunca</span>'}</td>
+        <td class="row-actions"><button class="btn btn-sm" data-act="pedido">${U.icon('plus', 14)} Pedido</button> <button class="icon-btn" data-act="more" aria-label="Mais ações">${U.icon('more', 18)}</button></td>
       </tr>`;
     }).join('');
-    listEl.innerHTML = head + `<tbody>${body || '<tr><td colspan="7" class="empty">Nenhum cliente encontrado.</td></tr>'}</tbody>`;
+    listEl.innerHTML = head + `<tbody>${body || `<tr><td colspan="7"><div class="empty">${U.icon('users', 28)}Nenhum cliente encontrado.</div></td></tr>`}</tbody>`;
     U.$('#cli-foot', root).textContent = `Mostrando ${U.int(Math.min(limit, rows.length))} de ${U.int(rows.length)}`;
     U.$('#cli-mais', root).hidden = rows.length <= limit;
   }
@@ -320,6 +396,8 @@
       if (tables.has('clientes')) { datalists(); fillFilters(); }
       if (visible && (tables.has('clientes') || tables.has('pedidos'))) renderList();
     },
+    novo() { App.ensure('clientes'); abrirNovo(); },
+    abrir(id) { App.ensure('clientes'); abrir(id); },
     formHtml, bindForm, saveFrom, datalists,
   };
 })();

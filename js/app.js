@@ -1,70 +1,100 @@
-/* Inicialização, login, navegação entre páginas e barra lateral. */
+/* Inicialização, login, navegação, tema e atalhos de teclado. */
 (function () {
   'use strict';
 
   window.Pages = window.Pages || {};
   const PAGES = ['clientes', 'pedidos', 'estoque', 'ocorrencias', 'ajustes'];
+  const NAV = [['clientes', 'Clientes', 'users'], ['pedidos', 'Pedidos', 'receipt'], ['estoque', 'Estoque', 'box'], ['ocorrencias', 'Ocorrências', 'alert']];
   let current = null;
   const built = {};
 
   const App = {
-    go(page) { location.hash = '#' + page; },
+    go(page) {
+      if (location.hash === '#' + page) show(page);
+      else location.hash = '#' + page;
+    },
     current: () => current,
+    /** Garante que a página está montada (para abrir painéis vindos de outra página). */
+    ensure(page) {
+      if (current !== page) App.go(page);
+      if (!built[page]) show(page);
+    },
+    toggleTheme() {
+      const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = t;
+      try { localStorage.setItem('ourosaf-tema', t); } catch (e) { /* ignore */ }
+      themeIcon();
+    },
   };
   window.App = App;
 
+  function themeIcon() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    U.$('#btn-theme').innerHTML = U.icon(dark ? 'sun' : 'moon', 18);
+    const meta = document.querySelector('meta[name=theme-color]');
+    if (meta) meta.content = dark ? '#0E1513' : '#F5F4EC';
+  }
+
   function show(page) {
     if (!PAGES.includes(page)) page = 'pedidos';
+    const changed = current !== page;
     current = page;
     PAGES.forEach((p) => { U.$('#page-' + p).hidden = p !== page; });
-    U.$$('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
+    U.$$('.nav a, .tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.page === page));
     const mod = Pages[page];
     const root = U.$('#page-' + page);
     if (!built[page]) { mod.build(root); built[page] = true; }
     if (mod.show) mod.show();
-    window.scrollTo(0, 0);
+    if (changed) window.scrollTo(0, 0);
   }
 
-  function stats() {
-    const peds = D.pedidos();
-    U.$('#st-clientes').textContent = U.int(Store.list('clientes').length);
-    U.$('#st-pedidos').textContent = U.int(peds.length);
-    U.$('#st-semnota').textContent = U.int(peds.filter((p) => !p.nota && p.status !== 'cancelado').length);
+  function navs() {
+    const html = NAV.map(([k, l, ic]) => `<a href="#${k}" data-page="${k}">${U.icon(ic, 16)}<span>${l}</span></a>`).join('');
+    U.$('#nav').innerHTML = html;
+    U.$('#tabbar').innerHTML = NAV.map(([k, l, ic]) => `<a href="#${k}" data-page="${k}">${U.icon(ic, 20)}<span>${l}</span></a>`).join('');
   }
 
   function empresaSelects() {
     const list = D.empresas();
     const id = D.empresaId();
-    const html = list.map((e) => `<option value="${e.id}" ${e.id === id ? 'selected' : ''}>${U.esc(e.nome)}</option>`).join('');
-    const many = list.length > 1;
-    U.$('#empresa-sel').innerHTML = html;
-    U.$('#empresa-sel-m').innerHTML = html;
-    U.$('#empresa-sel-wrap').hidden = !many;
-    U.$('#empresa-sel-m').hidden = !many;
+    const sel = U.$('#empresa-sel');
+    sel.innerHTML = list.map((e) => `<option value="${e.id}" ${e.id === id ? 'selected' : ''}>${U.esc(e.nome)}</option>`).join('');
+    sel.hidden = list.length < 2;
     const e = D.empresa();
-    U.$('#side-empresa').textContent = e ? 'Gestão ' + e.nome : 'Gestão';
+    U.$('#side-empresa').textContent = e ? 'Representação ' + e.nome : 'Gestão';
   }
 
   function onEmpresaChange(id) {
     D.setEmpresa(id);
     empresaSelects();
-    stats();
-    // Reconstrói páginas que dependem dos produtos da empresa
     ['pedidos', 'estoque', 'ocorrencias'].forEach((p) => { if (built[p]) { built[p] = false; U.$('#page-' + p).innerHTML = ''; } });
     show(current);
   }
 
-  const refreshVisible = U.debounce((tables) => {
-    stats();
-    if (tables.has('empresas') || tables.has('produtos')) empresaSelects();
-    if (tables.has('produtos')) {
-      // Layout dos produtos mudou: reconstrói as páginas na próxima visita
+  const changedTables = new Set();
+  const refreshVisible = U.debounce(() => {
+    if (changedTables.has('empresas') || changedTables.has('produtos')) empresaSelects();
+    if (changedTables.has('produtos')) {
       ['pedidos', 'estoque', 'ocorrencias'].forEach((p) => { if (built[p] && p !== current) { built[p] = false; U.$('#page-' + p).innerHTML = ''; } });
     }
-    PAGES.forEach((p) => { if (built[p] && Pages[p].onData) Pages[p].onData(tables, p === current); });
-    tables.clear();
+    PAGES.forEach((p) => { if (built[p] && Pages[p].onData) Pages[p].onData(changedTables, p === current); });
+    changedTables.clear();
   }, 120);
-  const changedTables = new Set();
+
+  async function menuPrincipal(btn) {
+    const items = [
+      { label: 'Ajustes e backup', value: 'ajustes', icon: 'settings' },
+      { label: 'Baixar backup agora', value: 'backup', icon: 'download' },
+    ];
+    if (Store.mode === 'supabase') items.push({ label: 'Atualizar dados', value: 'sync', icon: 'refresh' }, '-', { label: 'Sair da conta', value: 'sair', icon: 'logout', danger: true });
+    const v = await U.menu(btn, items);
+    if (v === 'ajustes') App.go('ajustes');
+    if (v === 'backup') { U.download(`ourosaf_backup_${U.today()}.json`, JSON.stringify(Store.dump())); U.toast('Backup baixado'); }
+    if (v === 'sair') Store.signOut();
+    if (v === 'sync') {
+      try { const n = await Store.sync(); U.toast(n ? `${n} alteração(ões) recebidas` : 'Tudo atualizado'); } catch (e) { U.toast('Erro ao atualizar: ' + e.message, 'error'); }
+    }
+  }
 
   async function boot() {
     const msg = U.$('#loading-msg');
@@ -118,31 +148,35 @@
 
     Store.on((e) => {
       if (e.type === 'status') {
-        const dot = U.$('#save-dot');
-        dot.className = 'dot ' + (e.state === 'saving' ? 'saving' : e.state === 'error' ? 'error' : '');
+        U.$('#save-dot').className = 'dot ' + (e.state === 'saving' ? 'saving' : e.state === 'error' ? 'error' : '');
         U.$('#save-msg').textContent = e.msg;
       } else if (e.type === 'change') {
         changedTables.add(e.table);
-        refreshVisible(changedTables);
+        refreshVisible();
       }
     });
-    U.$('#save-msg').textContent = Store.mode === 'local' ? 'Modo local (somente este navegador)' : 'Salvo na nuvem';
+    U.$('#save-msg').textContent = Store.mode === 'local' ? 'Modo local' : 'Salvo na nuvem';
 
+    navs();
+    themeIcon();
+    U.$('#ic-search').innerHTML = U.icon('search', 16);
+    U.$('#btn-menu').innerHTML = U.icon('more', 18);
     U.$('#splash').hidden = true;
     U.$('#app').hidden = false;
-    U.$('#btn-logout').hidden = Store.mode !== 'supabase';
-    U.$('#btn-sync').hidden = Store.mode !== 'supabase';
-    U.$('#btn-logout').onclick = () => Store.signOut();
-    U.$('#btn-sync').onclick = async () => {
-      try {
-        const n = await Store.sync();
-        U.toast(n ? `${n} alteração(ões) recebidas` : 'Tudo atualizado');
-      } catch (e) { U.toast('Erro ao atualizar: ' + e.message, 'error'); }
-    };
+    U.$('#btn-theme').onclick = App.toggleTheme;
+    U.$('#btn-menu').onclick = (e) => menuPrincipal(e.currentTarget);
+    U.$('#open-palette').onclick = () => Palette.show();
     U.$('#empresa-sel').onchange = (e) => onEmpresaChange(e.target.value);
-    U.$('#empresa-sel-m').onchange = (e) => onEmpresaChange(e.target.value);
 
-    // Ao voltar para a aba depois de um tempo, busca alterações de outros aparelhos
+    // Atalhos: Ctrl+K busca, N novo pedido, / busca na lista
+    document.addEventListener('keydown', (e) => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); Palette.show(); return; }
+      if (typing || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal-back, .palette-back') || U.drawerOpen()) return;
+      if (e.key === 'n' || e.key === 'N') { e.preventDefault(); Pages.pedidos.novo(); }
+      if (e.key === '/') { const s = U.$(`#page-${current} .toolbar .search input`); if (s) { e.preventDefault(); s.focus(); } }
+    });
+
     let lastSync = Date.now();
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && Store.mode === 'supabase' && Date.now() - lastSync > 60000) {
@@ -155,7 +189,6 @@
     });
 
     empresaSelects();
-    stats();
     window.addEventListener('hashchange', () => show(location.hash.slice(1)));
     show(location.hash.slice(1) || 'pedidos');
   }
