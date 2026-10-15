@@ -247,13 +247,42 @@
     if (r.acertos.length) Store.saveMany('acertos', r.acertos);
     if (r.ocorrencias.length) Store.saveMany('ocorrencias', r.ocorrencias);
     if (r.config.data_base) Store.setConfig('estoque:' + empresaId, r.config);
+    if (Store.mode === 'supabase') await aguardarEnvio(r.clientes.length + r.pedidos.length + r.entradas.length + r.acertos.length + r.ocorrencias.length);
     const est = D.estoque(empresaId);
     const resumo = Object.values(est).map((e) => `${e.produto.nome}: ${U.num(e.saldo)} cx`).join(' · ');
     await U.modal({
       title: 'Importação concluída',
-      body: `<p><b>${r.clientes.length}</b> clientes, <b>${r.pedidos.length}</b> pedidos, <b>${r.entradas.length}</b> entradas e <b>${r.ocorrencias.length}</b> ocorrências importados.</p>
-        <p>Estoque calculado: <b>${U.esc(resumo)}</b></p>${r.avisos.map((a) => `<p class="muted">${U.esc(a)}</p>`).join('')}
-        ${Store.mode === 'supabase' ? '<p class="muted">O envio para a nuvem continua em segundo plano — acompanhe no rodapé da barra lateral e não feche a página até aparecer "Salvo na nuvem".</p>' : ''}`,
+      body: `<p><b>${U.int(r.clientes.length)}</b> clientes, <b>${U.int(r.pedidos.length)}</b> pedidos, <b>${r.entradas.length}</b> entradas e <b>${r.ocorrencias.length}</b> ocorrências importados${Store.mode === 'supabase' ? ' e salvos na nuvem' : ''}.</p>
+        <p>Estoque calculado: <b>${U.esc(resumo)}</b></p>${r.avisos.map((a) => `<p class="muted">${U.esc(a)}</p>`).join('')}`,
+    });
+  }
+
+  /** Mostra o progresso do envio para a nuvem até a fila esvaziar. */
+  function aguardarEnvio(total) {
+    return new Promise((resolve) => {
+      const back = document.createElement('div');
+      back.className = 'modal-back';
+      back.innerHTML = `<div class="login"><h2 style="margin-top:0">Enviando para a nuvem…</h2>
+        <p class="muted" id="env-msg">Preparando</p><div class="progress"><div id="env-bar"></div></div>
+        <p class="muted small mt">Não feche esta página até terminar.</p>
+        <button class="btn btn-sm mt" id="env-bg">Continuar em segundo plano</button></div>`;
+      document.body.appendChild(back);
+      const start = Store.pendingCount() || total;
+      back.querySelector('#env-bg').onclick = () => { clearInterval(tick); back.remove(); resolve(); };
+      let erroDesde = null;
+      var tick = setInterval(() => {
+        const left = Store.pendingCount();
+        const done = Math.max(0, start - left);
+        back.querySelector('#env-bar').style.width = Math.round((done / start) * 100) + '%';
+        back.querySelector('#env-msg').textContent = `${U.int(done)} de ${U.int(start)} registros enviados`;
+        const msg = document.getElementById('save-msg').textContent;
+        if (/erro|sem internet/i.test(msg)) {
+          erroDesde = erroDesde || Date.now();
+          back.querySelector('#env-msg').textContent = msg + ' — tentando de novo…';
+          if (Date.now() - erroDesde > 2500) Store.flush();
+        } else erroDesde = null;
+        if (!left) { clearInterval(tick); back.remove(); resolve(); }
+      }, 400);
     });
   }
 
