@@ -18,7 +18,7 @@
       'complemento', 'bairro', 'cidade', 'uf', 'telefone', 'email', 'contato', 'observacao'],
     pedidos: ['numero', 'empresa_id', 'cliente_id', 'cnpj', 'cliente_nome', 'cliente_email', 'cidade', 'bairro', 'uf',
       'vendedor', 'data_pedido', 'data_faturamento', 'prazo', 'tipo', 'pedido_cliente', 'transporte',
-      'anotacao_canhoto', 'observacao', 'itens', 'total', 'nota', 'canhoto', 'destaque', 'status'],
+      'anotacao_canhoto', 'observacao', 'itens', 'total', 'nota', 'canhoto', 'canhoto_data', 'destaque', 'status'],
     entradas: ['empresa_id', 'produto_id', 'data', 'caixas', 'nota_fornecedor', 'fornecedor', 'lote', 'validade',
       'custo_unitario', 'observacao'],
     acertos: ['empresa_id', 'produto_id', 'data', 'sistema', 'contado', 'diferenca', 'motivo'],
@@ -28,7 +28,7 @@
   };
   const TABLES = Object.keys(COLS);
   // Colunas de data/uuid: string vazia precisa virar null para o Postgres aceitar.
-  const NULLABLE = /^(data|data_|validade|.*_id$|deleted_at)/;
+  const NULLABLE = /^(data|data_|validade|.*_id$|.*_data$|deleted_at)/;
 
   const mem = {};       // table -> Map(id -> row)
   const cache = {};     // table -> array (invalidado em alterações)
@@ -38,6 +38,7 @@
   let lastSync = {};    // table -> maior updated_at visto
   let pending = [];     // [{table, row}] aguardando envio
   let flushing = false;
+  const faltando = {};  // table -> Set(colunas que ainda não existem no banco)
 
   TABLES.forEach((t) => { mem[t] = new Map(); });
 
@@ -156,11 +157,21 @@
           const o = { ...r };
           delete o.created_at;
           delete o.updated_at;
+          for (const c of faltando[table] || []) delete o[c];
           return o;
         });
         const q = sb.from(table).upsert(rows, table === 'config' ? { onConflict: 'owner,id' } : undefined).select();
         const { data, error } = await q;
-        if (error) throw error;
+        if (error) {
+          // Coluna nova ainda não criada no banco: envia sem ela e avisa uma vez
+          const m = /could not find the '(\w+)' column/i.exec(error.message || '');
+          if (m && !(faltando[table] && faltando[table].has(m[1]))) {
+            (faltando[table] = faltando[table] || new Set()).add(m[1]);
+            U.toast(`Atualize o banco: rode o arquivo supabase/schema.sql no Supabase (coluna "${m[1]}" ausente). Os demais dados foram salvos.`, 'warn', 9000);
+            continue;
+          }
+          throw error;
+        }
         for (const r of data) {
           if (!r.deleted_at && mem[table].has(r.id)) mem[table].set(r.id, { ...mem[table].get(r.id), updated_at: r.updated_at });
         }

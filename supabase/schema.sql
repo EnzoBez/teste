@@ -96,6 +96,7 @@ create table if not exists public.pedidos (
   total numeric not null default 0,
   nota text,
   canhoto boolean not null default false,
+  canhoto_data date,
   destaque text,
   status text not null default 'ativo',        -- ativo | cancelado
   created_at timestamptz not null default now(),
@@ -171,6 +172,9 @@ create table if not exists public.config (
   deleted_at timestamptz,
   primary key (owner, id)
 );
+
+-- Atualizações de versões anteriores (seguro rodar de novo)
+alter table public.pedidos add column if not exists canhoto_data date;
 
 -- ---------------------------------------------------------------------
 -- Índices, gatilhos e segurança (cada usuário só enxerga os próprios dados)

@@ -183,7 +183,7 @@
   async function importarClientes() {
     const f = await escolherArquivo('.xlsx,.xls,.csv');
     if (!f) return;
-    await U.loadScript('js/vendor/xlsx.full.min.js');
+    await U.loadScript('js/vendor/xlsx-style.min.js');
     let rows;
     try {
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });

@@ -72,7 +72,7 @@
             <div class="f s3"><label>Nota fiscal</label><input type="text" name="nota" inputmode="numeric" placeholder="Depois do faturamento"></div>
             <div class="f s3"><label>Data do faturamento</label><input type="date" name="data_faturamento"></div>
             <div class="f s3"><label>Destaque</label><select name="destaque">${U.DESTAQUES.map((d) => `<option value="${d.v}">${d.label}</option>`).join('')}</select></div>
-            <div class="f s3" style="justify-content:flex-end;padding-bottom:9px"><label class="check"><input type="checkbox" name="canhoto"> Canhoto assinado</label></div>
+            <div class="f s3"><label class="check" style="min-height:22px"><input type="checkbox" name="canhoto"> Canhoto assinado em</label><input type="date" name="canhoto_data"></div>
           </div>
         </form>`;
     root.innerHTML = `
@@ -249,6 +249,10 @@
     form.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); salvar(); }
     });
+    const cbCanhoto = form.querySelector('[name=canhoto]');
+    const dtCanhoto = form.querySelector('[name=canhoto_data]');
+    cbCanhoto.addEventListener('change', () => { dtCanhoto.value = cbCanhoto.checked ? (dtCanhoto.value || U.today()) : ''; });
+    dtCanhoto.addEventListener('input', () => { if (dtCanhoto.value) cbCanhoto.checked = true; });
     form.querySelector('[name=nota]').addEventListener('input', (e) => {
       const fat = form.querySelector('[name=data_faturamento]');
       if (e.target.value && !fat.value) fat.value = U.today();
@@ -428,6 +432,8 @@
   function salvar() {
     if (!cliente) { U.toast('Selecione o cliente', 'warn'); U.$('#ped-cli-q', root).focus(); return; }
     const f = U.formData(form);
+    if (!f.canhoto) f.canhoto_data = '';
+    else if (!f.canhoto_data) f.canhoto_data = U.today();
     const itens = readItens().filter((i) => i.caixas > 0);
     if (!itens.length) { U.toast('Informe a quantidade de caixas de pelo menos um produto', 'warn'); const el = U.$('.prod [data-k=caixas]', root); if (el) el.focus(); return; }
     if (f.tipo !== 'troca' && itens.some((i) => !i.valor_unitario)) {
@@ -505,7 +511,8 @@
       if (a === 'edit') editar(id);
       if (a === 'canhoto') {
         const p = Store.get('pedidos', id);
-        Store.save('pedidos', { id, canhoto: !p.canhoto });
+        Store.save('pedidos', { id, canhoto: !p.canhoto, canhoto_data: !p.canhoto ? U.today() : null });
+        U.toast(!p.canhoto ? `Canhoto da nota ${p.nota || 'nº ' + p.numero} assinado em ${U.date(U.today())}` : 'Canhoto marcado como pendente');
       }
       if (a === 'more') {
         const p = Store.get('pedidos', id);
@@ -648,7 +655,8 @@
   }
 
   function rowHtml(p, prods) {
-    const cls = ['prow', selected.has(p.id) && 'sel', p.status === 'cancelado' && 'cancelado', p.destaque && 'hl-' + p.destaque].filter(Boolean).join(' ');
+    const cls = ['prow', selected.has(p.id) && 'sel', p.status === 'cancelado' && 'cancelado', p.destaque && 'hl-' + p.destaque, p.canhoto && 'canhoto-ok'].filter(Boolean).join(' ');
+    const nota = p.nota ? U.digits(p.nota) || p.nota : '';
     const badges = [p.tipo === 'bonificacao' && '<span class="badge b-warn">Bonificação</span>', p.tipo === 'troca' && '<span class="badge b-info">Troca</span>',
       p.status === 'cancelado' && '<span class="badge b-danger">Cancelado</span>', p.status === 'devolvido' && '<span class="badge b-warn">Devolvido</span>'].filter(Boolean).join(' ');
     const items = prods.map((pr, i) => {
@@ -658,13 +666,13 @@
     const local = [p.cidade, p.bairro].filter(Boolean).join(' · ');
     return `<div class="${cls}" data-id="${p.id}">
       <label class="cb"><input type="checkbox" data-sel ${selected.has(p.id) ? 'checked' : ''} aria-label="Selecionar pedido"></label>
+      <div class="p-nota"><button class="nota-btn ${nota ? 'has' : ''}" data-act="nota" title="Clique para ${nota ? 'alterar' : 'lançar'} a nota">${nota ? U.esc(nota) : 'Sem nota'}</button></div>
       <div class="p-client" data-act="edit" title="Abrir pedido"><span class="avatar" style="--h:${U.hue(p.cliente_nome)}">${U.esc(U.initials(p.cliente_nome))}</span>
         <div><span class="p-name">${U.esc(p.cliente_nome || '(sem cliente)')}</span><span class="p-meta">${badges ? badges + ' ' : ''}${U.esc(local || U.fmtDoc(p.cnpj))}${p.prazo ? ' · ' + U.esc(p.prazo) : ''}</span></div></div>
       <div class="p-vend"><span>${U.esc(p.vendedor || '—')}</span><span class="p-meta">${[p.pedido_cliente && 'Ped. ' + U.esc(p.pedido_cliente), p.observacao && U.esc(p.observacao)].filter(Boolean).join(' · ')}</span></div>
       <div class="p-items">${items || '<span class="muted">—</span>'}</div>
       <div class="p-total">${U.money(p.total)}<small>nº ${p.numero || '—'}</small></div>
-      <div class="p-nota"><button class="nota-btn ${p.nota ? 'has' : ''}" data-act="nota" title="Clique para ${p.nota ? 'alterar' : 'lançar'} a nota">${p.nota ? 'NF ' + U.esc(p.nota) : 'Sem nota'}</button></div>
-      <div class="p-flags"><button class="flag ${p.canhoto ? 'on' : ''}" data-act="canhoto" title="Canhoto ${p.canhoto ? 'assinado' : 'pendente'} — clique para alterar">${U.icon(p.canhoto ? 'check' : 'pen', 15)}</button></div>
+      <div class="p-flags"><button class="flag ${p.canhoto ? 'on' : ''}" data-act="canhoto" title="Canhoto ${p.canhoto ? 'assinado' + (p.canhoto_data ? ' em ' + U.date(p.canhoto_data) : '') : 'pendente'} — clique para alterar">${U.icon(p.canhoto ? 'check' : 'pen', 15)}${p.canhoto ? `<span class="flag-date">${p.canhoto_data ? U.date(p.canhoto_data).slice(0, 5) : 'ok'}</span>` : ''}</button></div>
       <div class="p-more"><button class="icon-btn" data-act="more" aria-label="Mais ações">${U.icon('more', 18)}</button></div>
     </div>`;
   }
@@ -740,7 +748,7 @@
     const p = Store.get('pedidos', id);
     reset();
     const c = Store.get('clientes', p.cliente_id) || D.clientesPorCnpj(p.cnpj)[0];
-    U.fillForm(form, { ...p, nota: '', data_faturamento: '', canhoto: false, destaque: '', data_pedido: U.today() });
+    U.fillForm(form, { ...p, nota: '', data_faturamento: '', canhoto: false, canhoto_data: '', destaque: '', data_pedido: U.today() });
     fillItens(p.itens || []);
     if (c) selectCliente(c, true);
     calc();

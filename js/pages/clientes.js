@@ -260,7 +260,7 @@
     const precos = D.produtos().map((p) => { const v = D.ultimoPreco(c.cnpj, p.id); return v != null ? `${U.esc(p.nome)} <b>${U.money(v)}</b>/un` : ''; }).filter(Boolean).join(' · ');
     U.$('#cli-detail-title', root).innerHTML = `<span style="display:flex;align-items:center;gap:12px"><span class="avatar" style="--h:${U.hue(c.razao_social)};width:44px;height:44px;font-size:15px">${U.esc(U.initials(c.razao_social))}</span><span>${U.esc(c.razao_social)}</span></span>`;
     U.$('#cli-detail-sub', root).textContent = [U.fmtDoc(c.cnpj), c.ie && 'IE ' + c.ie].filter(Boolean).join(' · ');
-    const rows = peds.slice(0, 80).map((p) => `<tr><td>${U.date(p.data_pedido)}</td><td>${p.nota ? 'NF ' + U.esc(p.nota) : '<span class="badge b-warn">Sem nota</span>'}</td>
+    const rows = peds.slice(0, 80).map((p) => `<tr><td>${U.date(p.data_pedido)}</td><td>${p.nota ? '<b>' + U.esc(U.digits(p.nota) || p.nota) + '</b>' : '<span class="badge b-warn">Sem nota</span>'}</td>
       <td>${(p.itens || []).filter((i) => +i.caixas).map((i) => { const pr = prods.find((x) => x.id === i.produto_id); return `${U.num(i.caixas)} cx ${U.esc(pr ? pr.nome : '')} <span class="muted">· ${U.money(i.valor_unitario)}/un</span>`; }).join('<br>')}</td>
       <td>${U.esc(p.vendedor || '')}</td><td class="num"><b>${U.money(p.total)}</b></td>
       <td>${p.status === 'cancelado' ? '<span class="badge b-danger">Cancelado</span>' : p.status === 'devolvido' ? '<span class="badge b-warn">Devolvido</span>' : p.tipo === 'bonificacao' ? '<span class="badge b-warn">Bonif.</span>' : ''}</td></tr>`).join('');
